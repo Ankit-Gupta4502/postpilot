@@ -1,8 +1,8 @@
 import { QUEUE_NAMES } from '@postpilot/shared'
-import { publishHandler } from './handlers/publish.js'
-import { syncPostsHandler } from './handlers/sync-posts.js'
-import { analyticsHandler } from './handlers/analytics.js'
-import { webhookHandler } from './handlers/webhook.js'
+import { publishHandler } from './handlers/publish'
+import { syncPostsHandler } from './handlers/sync-posts'
+import { analyticsHandler } from './handlers/analytics'
+import { webhookHandler } from './handlers/webhook'
 
 const QUEUE_ENDPOINT = process.env['CF_QUEUES_PULL_ENDPOINT']!
 const VISIBILITY_TIMEOUT_MS = Number(process.env['QUEUE_VISIBILITY_TIMEOUT_MS'] ?? 900000)

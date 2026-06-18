@@ -11,5 +11,7 @@ build/
 *.log
 *.db
 *.sqlite
+app.config.timestamp_*.js
+vite.config.timestamp_*.js
 .vscode/
 .idea/

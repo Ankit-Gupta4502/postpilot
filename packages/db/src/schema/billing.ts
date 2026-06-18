@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp, uuid, bigint, boolean } from 'drizzle-orm/pg-core'
-import { users } from './auth.js'
-import { organizations } from './organizations.js'
+import { users } from './auth'
+import { organizations } from './organizations'
 
 export const billingCustomers = pgTable('billing_customers', {
   id: uuid('id').defaultRandom().primaryKey(),

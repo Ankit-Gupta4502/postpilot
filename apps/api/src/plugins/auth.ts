@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
 import fp from 'fastify-plugin'
-import { auth } from '../lib/auth.js'
+import { auth } from '../lib/auth'
 import { db, schema } from '@postpilot/db'
 import { eq, and } from 'drizzle-orm'
 
@@ -12,10 +12,22 @@ declare module 'fastify' {
   }
 }
 
+/** Convert a Node.js IncomingMessage + raw body into a Fetch API Request for Better Auth. */
+function toFetchRequest(req: FastifyRequest): Request {
+  const url = `http://${req.headers['host'] ?? 'localhost'}${req.url}`
+  const headers = new Headers(req.headers as Record<string, string>)
+  const hasBody = req.method !== 'GET' && req.method !== 'HEAD'
+  return new Request(url, {
+    method: req.method,
+    headers,
+    body: hasBody ? JSON.stringify(req.body) : undefined,
+  })
+}
+
 const plugin: FastifyPluginAsync = async (fastify) => {
   // Delegate all /api/auth/* to Better Auth
   fastify.all('/api/auth/*', async (req: FastifyRequest, reply: FastifyReply) => {
-    const response = await auth.handler(req.raw)
+    const response = await auth.handler(toFetchRequest(req))
     reply.status(response.status)
     response.headers.forEach((value, key) => reply.header(key, value))
     return reply.send(response.body)

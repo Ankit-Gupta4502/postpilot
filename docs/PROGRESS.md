@@ -1,6 +1,6 @@
 # PostPilot — Build Progress
 
-_Last updated: 2026-06-18_
+_Last updated: 2026-06-19 (Phase 12 complete)_
 
 ## Legend
 - [x] Done — scaffolded / implemented
@@ -65,6 +65,9 @@ All Drizzle ORM schemas implemented from ARCHITECTURE.md:
 - [x] audit_log
 - [x] email_events (Resend delivery tracking)
 
+### Relations
+- [x] Drizzle relations for all tables (enables `with:` clause in queries)
+
 ---
 
 ## Phase 3: packages/shared ✅
@@ -73,6 +76,7 @@ All Drizzle ORM schemas implemented from ARCHITECTURE.md:
 - [x] PLAN_LIMITS constant map
 - [x] QUEUE_NAMES, ANALYTICS_CADENCE_HOURS
 - [x] Utility functions (generateIdempotencyKey, toSlug, hashToken, generateSecureToken)
+- [x] **Token encryption** — AES-256-GCM encrypt/decrypt (ENCRYPTION_KEY env var) (§11)
 
 ---
 
@@ -86,78 +90,192 @@ All Drizzle ORM schemas implemented from ARCHITECTURE.md:
 
 ---
 
-## Phase 5: apps/api — Fastify API ✅ (skeleton)
+## Phase 5: packages/adapters ✅ (NEW)
 
-- [x] Fastify v5 server with CORS, cookie plugins
-- [x] Better Auth integration (Google OAuth, session middleware)
+Platform adapter layer shared by `apps/api` and `apps/queue-worker`.
+
+- [x] PlatformAdapter interface (connect, refreshToken, publish, syncPosts, syncAnalytics, disconnect, verifyWebhook, handleWebhook)
+- [x] InstagramAdapter — OAuth exchange (short→long-lived token), publish, syncPosts, syncAnalytics, Meta webhook HMAC verify
+- [x] FacebookAdapter — page token flow, feed publish, syncPosts, syncAnalytics, Meta webhook HMAC verify
+- [x] LinkedInAdapter — OAuth2 + PKCE, ugcPosts publish, syncPosts, socialMetrics analytics
+- [x] XAdapter — OAuth2 PKCE, tweet publish, syncPosts, public_metrics analytics
+- [x] YouTubeAdapter — OAuth2 refresh, channel discovery, syncPosts (search API), video statistics
+- [x] getAdapter() factory — singleton registry, throws on unknown platform
+
+---
+
+## Phase 6: apps/api — Fastify API ✅ (skeleton → real implementation)
+
+- [x] Fastify v5 server with CORS, cookie, multipart plugins
+- [x] Better Auth integration (Google OAuth, session middleware, Fetch API adapter)
 - [x] Auth hook: userId, orgId, orgRole on every request
 - [x] requireAuth / requireOrg middleware
 - [x] /api/orgs — list, create, get
 - [x] /api/workspaces — list, create
 - [x] /api/social-accounts — list, OAuth initiation
+- [x] **/oauth/:platform/callback** — full OAuth callback: validate state, exchange code, encrypt tokens, upsert social_accounts, enqueue initial sync (§6)
 - [x] /api/posts — list, create (draft + scheduled)
-- [x] /api/billing — plans list, subscribe stub
-- [x] /api/webhooks — Razorpay (sig verify), Meta (challenge handshake)
+- [x] **/api/media/upload** — multipart upload, SHA-256 dedup, R2 storage (§26)
+- [x] **/api/media/:mediaId** — media metadata
+- [x] /api/billing/plans — plan list
+- [x] **/api/billing/subscribe** — Razorpay subscription creation (§17.3)
+- [x] **/api/billing/subscriptions/:id/cancel** — subscription cancellation
+- [x] **/api/billing/webhooks/razorpay** — full webhook state machine: sig verify, dedup, payment.captured/failed, subscription.activated/halted/cancelled/charged/expired (§17.5)
+- [x] /api/webhooks — Meta challenge handshake
+- [x] **/api/invites** — create invite (Resend email), accept invite (transaction: org_members + workspace_members), revoke invite (§3.2, §30)
+- [x] Plan limit middleware — checkAccountLimit, checkMemberLimit pre-action gates (§16.3)
+- [x] **CF Queues push client** — apps/api/src/lib/queue.ts enqueueMessage / enqueueBatch (§31)
+- [x] **R2 client** — apps/api/src/lib/r2.ts putObject / deleteObject / presignPut
 
 ---
 
-## Phase 6: apps/web — TanStack Start Frontend ✅ (skeleton)
-
-- [x] TanStack Start + Vinxi setup
-- [x] @tailwindcss/vite integration
-- [x] TanStack Router file-based routes
-- [x] Root layout with Meta/Scripts
-- [x] Routes: / (landing), /login, /dashboard
-- [x] Better Auth client (authClient with Google sign-in)
-- [x] apiFetch helper with X-Org-Id header support
-
----
-
-## Phase 7: apps/queue-worker ✅ (skeleton)
+## Phase 7: apps/queue-worker ✅ (skeleton → real implementation)
 
 - [x] Cloudflare Queues HTTP Pull API consumer loop
 - [x] Multi-queue polling (publish, sync, analytics, webhook)
 - [x] At-least-once + ack/retry per message
-- [x] publishHandler — idempotent, lease-aware, immediate platform_posts upsert
+- [x] **publishHandler** — idempotent, lease-aware, media-gated, real adapter call, decrypt token, immediate platform_posts upsert (§5.5, §21, §24)
 - [x] syncPostsHandler stub
 - [x] analyticsHandler stub
 - [x] webhookHandler stub
 
 ---
 
-## Phase 8: apps/scheduler ✅ (skeleton)
+## Phase 8: apps/scheduler ✅ (skeleton → real implementation)
 
 - [x] node-cron driven scheduler
 - [x] scheduledPublishJob — posts due now → status=publishing
 - [x] planReconciliationJob — past_due grace elapsed → free/expired
-- [x] tokenRefreshJob — expiring tokens
+- [x] **tokenRefreshJob** — real adapter.refreshToken() + encrypt new token, update social_accounts, audit_log on failure (§11)
 - [x] leaseRecoveryJob — reclaims stuck running jobs (§24)
 - [x] analyticsSchedulerJob — adaptive hot/warm/cold cadence (§23)
+
+---
+
+## Phase 9: Core Handler & API Completions ✅ (NEW)
+
+### Queue-Worker Handlers (real implementations)
+- [x] **syncPostsHandler** — adapter.syncPosts() with checkpoint persistence (sync_state upsert), platform_posts upsert, health_status update on error (§7, §5.7)
+- [x] **analyticsHandler** — adapter.syncAnalytics() per post, append-only post_metric_snapshots insert, platform_posts metrics update, per-post error isolation (§22)
+- [x] **webhookHandler** — signature verify → adapter.handleWebhook() → route by event type (media.ready flips media status, Meta events logged with TODO for full processing) (§10, §28)
+
+### Scheduler
+- [x] **tokenRefreshJob** — real adapter.refreshToken() call, AES-256-GCM re-encrypt, health_status=broken + status=expired on failure, audit_log entry (§11)
+
+### API Middleware
+- [x] **checkWorkspaceLimit** — pre-action gate counting workspaces per org vs plan_limits.maxWorkspaces (§16.3)
+- [x] Wired checkWorkspaceLimit as preHandler on POST /api/workspaces
+
+### Billing (apps/api)
+- [x] **POST /api/billing/orders** — one-off Razorpay order creation, receipt generation, orders table insert (§17.4)
+- [x] **order.paid webhook handler** — update orders.status='paid', upgrade org plan if purpose='plan_upgrade', audit_log (§17.5)
+
+### Analytics Dashboard Routes (apps/api)
+- [x] **GET /api/analytics/:socialAccountId/snapshots** — time-filtered post_metric_snapshots with inArray + gte/lte (§22)
+- [x] **GET /api/analytics/:socialAccountId/posts** — platform_posts for account, ordered by publishedAt DESC (§22)
+- [x] **GET /api/analytics/:socialAccountId/summary** — account metadata + totalPosts + latestSnapshot (§22, §27)
+
+### Dependency fix
+- [x] Added @postpilot/adapters to apps/scheduler/package.json (was missing, caused tsc error)
+
+---
+
+---
+
+## Phase 10: Social Accounts Management UI ✅ (NEW)
+
+### Backend additions
+- [x] **GET /oauth/:platform/init?workspaceId=** — creates oauth_state, builds platform OAuth URL (PKCE for LinkedIn/X), redirects browser (apps/api/src/routes/oauth.ts)
+- [x] **DELETE /api/social-accounts/:accountId** — disconnect: token revoke, status=revoked, cancel queued jobs, audit_log (apps/api/src/routes/social-accounts.ts)
+
+### Frontend — one component per file
+- [x] **OrgProvider + useOrg()** — loads orgs + workspaces, stores active org/workspace in localStorage, React context (apps/web/src/lib/org-context.tsx)
+- [x] **OrgSwitcher** — org dropdown (apps/web/src/components/layout/OrgSwitcher.tsx)
+- [x] **NavLink** — active-state aware sidebar nav link (apps/web/src/components/layout/NavLink.tsx)
+- [x] **Sidebar** — sidebar with logo, org switcher, nav, sign-out (apps/web/src/components/layout/Sidebar.tsx)
+- [x] **Shell** — authenticated app layout wrapping Sidebar + main (apps/web/src/components/layout/Shell.tsx)
+- [x] **PlatformIcon** — coloured avatar badge per platform (apps/web/src/features/accounts/PlatformIcon.tsx)
+- [x] **HealthBadge** — healthy/warning/broken Badge (apps/web/src/features/accounts/HealthBadge.tsx)
+- [x] **AccountCard** — connected account row with disconnect mutation (apps/web/src/features/accounts/AccountCard.tsx)
+- [x] **ConnectPlatformButton** — navigates to OAuth init endpoint (apps/web/src/features/accounts/ConnectPlatformButton.tsx)
+- [x] **/accounts route** — lists connected accounts, shows unconnected platforms with connect buttons (apps/web/src/routes/accounts.tsx)
+- [x] **Dashboard updated** — uses Shell, loads real posts + accounts counts from API
+- [x] **OrgProvider wired** — into `__root.tsx` wrapping the Outlet
+
+### Infrastructure fixes (pre-existing issues resolved)
+- [x] `routeTree.gen.ts` — proper TanStack Router v1 module augmentation with `FileRoutesByPath` interface (fixes all `createFileRoute` type errors)
+- [x] `__root.tsx` — `HeadContent` + `Scripts` from `@tanstack/react-router` (not `@tanstack/start` which has no such exports)
+- [x] `client.tsx` — `<StartClient />` (no props in v1 API)
+- [x] `ssr.tsx` — `createStartHandler(defaultStreamHandler)` (new v1 API)
+- [x] All web app types clean (zero `tsc` errors)
+
+---
+
+---
+
+## Phase 11: Post Composer UI ✅ (NEW)
+
+### API fixes
+- [x] **POST /api/posts** — fixed hardcoded `platform: 'instagram'` in syndication_jobs (now looks up platform from social_accounts); added `mediaIds?: string[]` to body (links uploaded media to the post in the same transaction)
+
+### Frontend — one component per file
+- [x] **timezone.ts** — `localToUTC(localDT, tz)` converts datetime-local string + IANA TZ → UTC ISO string using Intl offset trick; `getDefaultTimezone()`, `getAllTimezones()` (apps/web/src/lib/timezone.ts)
+- [x] **PlatformCheckbox** — checkbox row for a single social account (apps/web/src/features/accounts/PlatformCheckbox.tsx)
+- [x] **PlatformSelector** — list of account checkboxes; empty state with link to /accounts (apps/web/src/features/accounts/PlatformSelector.tsx)
+- [x] **TimezoneSelect** — native `<select>` using Intl.supportedValuesOf with COMMON_TIMEZONES fallback (apps/web/src/features/compose/TimezoneSelect.tsx)
+- [x] **ScheduleField** — "Schedule for later" toggle + datetime-local input + TimezoneSelect (apps/web/src/features/compose/ScheduleField.tsx)
+- [x] **MediaUploader** — file input (image/video, multi), uploads to /api/media/upload, thumbnail grid with remove button (apps/web/src/features/compose/MediaUploader.tsx)
+- [x] **ComposerForm** — orchestrates PlatformSelector, textarea, MediaUploader, ScheduleField; per-platform character limits (X=280, IG=2200, LI=3000, YT=5000), TanStack Query mutation, navigate to /dashboard on success (apps/web/src/features/compose/ComposerForm.tsx)
+- [x] **/compose route** — fetches accounts, renders ComposerForm (apps/web/src/routes/compose.tsx)
+- [x] **Sidebar** — added "New Post" nav link to /compose
+- [x] **routeTree.gen.ts** — added /compose route
+
+---
+
+## Phase 12: Email/Password Auth + Workspace & Org Settings UI ✅ (NEW)
+
+### Auth
+- [x] **emailAndPassword enabled** — Better Auth server config (apps/api/src/lib/auth.ts)
+- [x] **features/auth/GoogleSignInButton.tsx** — shared Google OAuth button (extracted from login page)
+- [x] **features/auth/EmailSignInForm.tsx** — email + password sign-in with error handling
+- [x] **features/auth/EmailSignUpForm.tsx** — name + email + password registration form
+- [x] **routes/login.tsx** — email form + divider + Google OAuth + link to /register
+- [x] **routes/register.tsx** — registration page with email form + Google OAuth + link to /login
+- [x] **DB relations** — added `user` relation to `orgMembersRelations` and `workspaceMembersRelations`
+
+### Backend additions
+- [x] **GET /api/orgs/members** — list active org members with user info (`with: { user }`)
+- [x] **DELETE /api/orgs/members/:userId** — remove member (admin/owner; cannot remove owner)
+- [x] **GET /api/orgs/invites** — list pending invites (admin/owner only)
+- [x] **POST /api/workspaces** — now also inserts creator as workspace admin in same transaction
+- [x] **GET /api/workspaces/:workspaceId/members** — list workspace members with user info
+- [x] **POST /api/workspaces/:workspaceId/members** — add user to workspace (validates org membership)
+- [x] **DELETE /api/workspaces/:workspaceId/members/:userId** — remove from workspace
+
+### Workspace Management UI
+- [x] **features/workspaces/WorkspaceCard.tsx** — workspace card with active state + role badge
+- [x] **features/workspaces/CreateWorkspaceForm.tsx** — inline form to create a workspace
+- [x] **routes/workspaces.tsx** — /workspaces page: list all workspaces, create form, click to set active
+
+### Org Settings UI
+- [x] **features/settings/MembersTab.tsx** — org member list + inline invite form + remove button
+- [x] **features/settings/InvitesTab.tsx** — pending invites list + revoke button
+- [x] **features/settings/BillingTab.tsx** — current plan display + plan matrix cards
+- [x] **routes/settings.tsx** — /settings page with Members | Invites | Billing tab switcher
+
+### Navigation
+- [x] **Sidebar** — added Workspaces and Settings nav items
+- [x] **routeTree.gen.ts** — updated with /workspaces and /settings routes
 
 ---
 
 ## Next Up — Implementation TODOs
 
 ### High Priority
-- [ ] Platform adapters (Instagram, Facebook, LinkedIn, X, YouTube)
-  - [ ] connect() — OAuth token exchange
-  - [ ] publish() — idempotent post creation
-  - [ ] syncPosts() — paginated import with checkpoint
-  - [ ] syncAnalytics() — fetch metrics, insert snapshots
-  - [ ] refreshToken() — token rotation
-  - [ ] handleWebhook() — signature verify + event routing
-- [ ] Token encryption at rest (ENCRYPTION_KEY, AES-256-GCM)
-- [ ] Plan limit enforcement middleware (§16.3 — pre-action gate)
-- [ ] Queue publishing via CF API (actually enqueue to Cloudflare)
+- [ ] syncPostsHandler Meta-webhook full processing (parse entry array → trigger per-account sync)
 
 ### Medium Priority
-- [ ] Full Razorpay billing flow (create subscription, webhook state machine)
-- [ ] Org invite flow (send email via Resend, accept endpoint)
-- [ ] Media upload to R2 (multipart + SHA-256 dedup)
-- [ ] Analytics dashboard routes (charts from post_metric_snapshots)
-- [ ] Post composer UI (multi-platform, media attach, timezone picker)
-- [ ] Social accounts management UI
-- [ ] Workspace management UI
+- [ ] Analytics dashboard UI (charts, post metrics, account summary)
 
 ### Lower Priority
 - [ ] Backfill queue + handler (import full post history)
@@ -181,3 +299,6 @@ Key design decisions baked in:
 - **Adaptive analytics** — hot/warm/cold sync cadence reduces API calls 80-95% (§23)
 - **Pull-based queue** — Fastify worker pulls from CF Queues, no Cloudflare Workers runtime (§31)
 - **One plan_status flag** — two writers (webhook + daily cron), one reader (middleware) (§18)
+- **Token encryption** — AES-256-GCM envelope in packages/shared, decrypt at point of use (§11)
+- **Media deduplication** — SHA-256 checksum checked before upload, per-org scope (§26)
+- **Platform adapters** — stateless singletons in packages/adapters, consumed by API + queue-worker

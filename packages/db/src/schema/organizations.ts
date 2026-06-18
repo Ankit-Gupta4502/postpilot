@@ -1,5 +1,5 @@
 import { pgTable, text, timestamp, uuid, jsonb, unique } from 'drizzle-orm/pg-core'
-import { users } from './auth.js'
+import { users } from './auth'
 
 export const organizations = pgTable('organizations', {
   id: uuid('id').defaultRandom().primaryKey(),

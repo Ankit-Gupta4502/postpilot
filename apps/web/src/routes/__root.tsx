@@ -1,6 +1,6 @@
-import { createRootRoute, Outlet, ScrollRestoration } from '@tanstack/react-router'
-import { Meta, Scripts } from '@tanstack/start'
+import { createRootRoute, HeadContent, Outlet, Scripts} from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import { OrgProvider } from '../lib/org-context'
 import '../globals.css'
 
 export const Route = createRootRoute({
@@ -19,11 +19,10 @@ function RootDocument({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <Meta />
+        <HeadContent />
       </head>
       <body>
         {children}
-        <ScrollRestoration />
         <Scripts />
       </body>
     </html>
@@ -33,7 +32,9 @@ function RootDocument({ children }: { children: ReactNode }) {
 function RootComponent() {
   return (
     <RootDocument>
-      <Outlet />
+      <OrgProvider>
+        <Outlet />
+      </OrgProvider>
     </RootDocument>
   )
 }

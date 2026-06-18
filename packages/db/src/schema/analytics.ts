@@ -1,5 +1,5 @@
 import { pgTable, uuid, bigint, timestamp, index } from 'drizzle-orm/pg-core'
-import { platformPosts } from './posts.js'
+import { platformPosts } from './posts'
 
 export const postMetricSnapshots = pgTable('post_metric_snapshots', {
   id: uuid('id').defaultRandom().primaryKey(),

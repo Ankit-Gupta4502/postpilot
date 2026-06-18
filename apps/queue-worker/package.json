@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@postpilot/adapters": "workspace:*",
     "@postpilot/db": "workspace:*",
     "@postpilot/shared": "workspace:*",
     "drizzle-orm": "^0.44.1"

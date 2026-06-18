@@ -1,9 +1,9 @@
 import cron from 'node-cron'
-import { scheduledPublishJob } from './jobs/scheduled-publish.js'
-import { planReconciliationJob } from './jobs/plan-reconciliation.js'
-import { tokenRefreshJob } from './jobs/token-refresh.js'
-import { leaseRecoveryJob } from './jobs/lease-recovery.js'
-import { analyticsSchedulerJob } from './jobs/analytics-scheduler.js'
+import { scheduledPublishJob } from './jobs/scheduled-publish'
+import { planReconciliationJob } from './jobs/plan-reconciliation'
+import { tokenRefreshJob } from './jobs/token-refresh'
+import { leaseRecoveryJob } from './jobs/lease-recovery'
+import { analyticsSchedulerJob } from './jobs/analytics-scheduler'
 
 console.log('PostPilot scheduler starting...')
 

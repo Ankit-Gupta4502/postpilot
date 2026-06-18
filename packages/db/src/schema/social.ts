@@ -1,7 +1,7 @@
 import { pgTable, text, timestamp, uuid, index } from 'drizzle-orm/pg-core'
-import { users } from './auth.js'
-import { organizations } from './organizations.js'
-import { workspaces } from './workspaces.js'
+import { users } from './auth'
+import { organizations } from './organizations'
+import { workspaces } from './workspaces'
 
 export const oauthStates = pgTable('oauth_states', {
   id: uuid('id').defaultRandom().primaryKey(),

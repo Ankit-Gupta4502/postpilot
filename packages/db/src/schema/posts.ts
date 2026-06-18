@@ -1,8 +1,8 @@
 import { pgTable, text, timestamp, uuid, integer, bigint, boolean, index, unique } from 'drizzle-orm/pg-core'
-import { users } from './auth.js'
-import { organizations } from './organizations.js'
-import { workspaces } from './workspaces.js'
-import { socialAccounts } from './social.js'
+import { users } from './auth'
+import { organizations } from './organizations'
+import { workspaces } from './workspaces'
+import { socialAccounts } from './social'
 
 export const posts = pgTable('posts', {
   id: uuid('id').defaultRandom().primaryKey(),

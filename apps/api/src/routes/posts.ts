@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db, schema } from '@postpilot/db'
-import { eq, and } from 'drizzle-orm'
-import { requireOrg } from '../middleware/require-auth.js'
+import { eq, and, inArray } from 'drizzle-orm'
+import { requireOrg } from '../middleware/require-auth'
 import { generateIdempotencyKey } from '@postpilot/shared'
 
 export const postsRouter: FastifyPluginAsync = async (fastify) => {
@@ -16,11 +16,22 @@ export const postsRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send(posts)
   })
 
-  fastify.post<{ Body: { workspaceId: string; content: string; accountIds: string[]; scheduledFor?: string; timezone?: string } }>(
+  fastify.post<{ Body: { workspaceId: string; content: string; accountIds: string[]; scheduledFor?: string; timezone?: string; mediaIds?: string[] } }>(
     '/',
     { preHandler: [requireOrg] },
     async (req, reply) => {
-      const { workspaceId, content, accountIds, scheduledFor, timezone } = req.body
+      const { workspaceId, content, accountIds, scheduledFor, timezone, mediaIds } = req.body
+
+      // Fetch platforms for the selected accounts (also validates org ownership)
+      const accounts = accountIds.length > 0
+        ? await db.query.socialAccounts.findMany({
+            where: and(
+              inArray(schema.socialAccounts.id, accountIds),
+              eq(schema.socialAccounts.orgId, req.orgId!)
+            ),
+          })
+        : []
+      const platformByAccountId = new Map(accounts.map((a) => [a.id, a.platform]))
 
       const [post] = await db.transaction(async (tx) => {
         const [newPost] = await tx.insert(schema.posts).values({
@@ -38,10 +49,19 @@ export const postsRouter: FastifyPluginAsync = async (fastify) => {
             await tx.insert(schema.syndicationJobs).values({
               postId: newPost!.id,
               socialAccountId: accountId,
-              platform: 'instagram',
+              platform: platformByAccountId.get(accountId) ?? 'unknown',
               idempotencyKey: generateIdempotencyKey(newPost!.id, accountId),
             })
           }
+        }
+
+        if (mediaIds && mediaIds.length > 0) {
+          await tx.update(schema.media)
+            .set({ postId: newPost!.id })
+            .where(and(
+              inArray(schema.media.id, mediaIds),
+              eq(schema.media.orgId, req.orgId!)
+            ))
         }
 
         return [newPost]

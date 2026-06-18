@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { db, schema } from '@postpilot/db'
 import { eq, and } from 'drizzle-orm'
-import { requireOrg } from '../middleware/require-auth.js'
+import { requireOrg } from '../middleware/require-auth'
+import { getAdapter } from '@postpilot/adapters'
+import { decrypt } from '../lib/encryption'
 
 export const socialAccountsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { workspaceId: string } }>('/:workspaceId', { preHandler: [requireOrg] }, async (req, reply) => {
@@ -11,7 +13,52 @@ export const socialAccountsRouter: FastifyPluginAsync = async (fastify) => {
     return reply.send(accounts)
   })
 
-  // OAuth initiation
+  fastify.delete<{ Params: { accountId: string } }>(
+    '/:accountId',
+    { preHandler: [requireOrg] },
+    async (req, reply) => {
+      const account = await db.query.socialAccounts.findFirst({
+        where: and(
+          eq(schema.socialAccounts.id, req.params.accountId),
+          eq(schema.socialAccounts.orgId, req.orgId!)
+        ),
+      })
+      if (!account) return reply.status(404).send({ code: 'NOT_FOUND' })
+
+      // Best-effort token revocation
+      if (account.accessToken) {
+        const accessToken = decrypt(account.accessToken)
+        await getAdapter(account.platform).disconnect({ accessToken }).catch(() => {})
+      }
+
+      await db.update(schema.socialAccounts)
+        .set({ status: 'revoked', updatedAt: new Date() })
+        .where(eq(schema.socialAccounts.id, account.id))
+
+      // Cancel in-flight syndication jobs for this account
+      await db.update(schema.syndicationJobs)
+        .set({ status: 'cancelled' })
+        .where(
+          and(
+            eq(schema.syndicationJobs.socialAccountId, account.id),
+            eq(schema.syndicationJobs.status, 'queued')
+          )
+        )
+
+      await db.insert(schema.auditLog).values({
+        orgId: req.orgId!,
+        actorUser: req.userId!,
+        action: 'account.disconnect',
+        targetType: 'social_account',
+        targetId: account.id,
+        metadata: JSON.stringify({ platform: account.platform, username: account.username }),
+      }).catch(() => {})
+
+      return reply.send({ disconnected: true })
+    }
+  )
+
+  // OAuth initiation (legacy — use GET /oauth/:platform/init instead)
   fastify.post<{ Body: { workspaceId: string; platform: string } }>(
     '/connect',
     { preHandler: [requireOrg] },

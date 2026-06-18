@@ -1,6 +1,6 @@
 import { pgTable, text, timestamp, uuid, integer, jsonb } from 'drizzle-orm/pg-core'
-import { users } from './auth.js'
-import { organizations } from './organizations.js'
+import { users } from './auth'
+import { organizations } from './organizations'
 
 export const deadLetterJobs = pgTable('dead_letter_jobs', {
   id: uuid('id').defaultRandom().primaryKey(),

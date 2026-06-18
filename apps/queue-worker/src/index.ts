@@ -1,4 +1,4 @@
-import { runWorker } from './worker.js'
+import { runWorker } from './worker'
 
 console.log('PostPilot queue worker starting...')
 

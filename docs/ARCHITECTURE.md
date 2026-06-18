@@ -14,6 +14,15 @@
 > consumers). Sections 21–32 are the v4 layer; where they conflict with an earlier section, the
 > v4 section supersedes it, and the earlier section is annotated inline.
 >
+> **Implementation status (as of 2026-06-19):** All schema, adapters, API routes, and core
+> frontend UI are implemented through Phase 12. Completed: all queue-worker handlers
+> (syncPosts, analytics, webhook), scheduler jobs (tokenRefresh, leaseRecovery, adaptive
+> analytics), billing orders + webhook state machine, analytics dashboard API, social accounts
+> UI, post composer UI, email/password + Google auth, workspace management UI, org settings UI
+> (members / invites / billing). Remaining: full Meta-webhook event processing, analytics
+> dashboard UI (charts), backfill handler, DLQ admin, white-label subdomain routing, approval
+> workflow, KV rate limiting.
+>
 > Design intent and core principles from v1 are preserved.
 
 ---
