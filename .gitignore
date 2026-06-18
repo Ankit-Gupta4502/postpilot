@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.output/
+.vinxi/
+build/
+.env
+.env.local
+.env.*.local
+.turbo/
+.DS_Store
+*.log
+*.db
+*.sqlite
+.vscode/
+.idea/

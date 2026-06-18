@@ -1,0 +1,29 @@
+{
+  "name": "postpilot",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:api": "turbo run dev --filter=@postpilot/api",
+    "dev:web": "turbo run dev --filter=@postpilot/web",
+    "dev:worker": "turbo run dev --filter=@postpilot/queue-worker",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean",
+    "db:generate": "turbo run db:generate --filter=@postpilot/db",
+    "db:migrate": "turbo run db:migrate --filter=@postpilot/db",
+    "db:studio": "turbo run db:studio --filter=@postpilot/db",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=9"
+  }
+}
