@@ -1,0 +1,30 @@
+{
+  "name": "@postpilot/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vinxi dev",
+    "build": "vinxi build",
+    "start": "vinxi start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@postpilot/shared": "workspace:*",
+    "@postpilot/ui": "workspace:*",
+    "@tanstack/react-router": "^1.114.0",
+    "@tanstack/react-query": "^5.66.0",
+    "@tanstack/start": "^1.114.0",
+    "better-auth": "^1.2.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.0",
+    "@tailwindcss/vite": "^4.0.0",
+    "typescript": "^5.7.3"
+  }
+}
