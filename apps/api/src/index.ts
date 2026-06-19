@@ -15,6 +15,7 @@ import { webhooksRouter } from './routes/webhooks'
 import { invitesRouter } from './routes/invites'
 import { analyticsRouter } from './routes/analytics'
 import { adminRouter } from './routes/admin'
+import { authRouter } from './routes/auth'
 
 function resolvePinoTransport() {
   if (process.env['NODE_ENV'] === 'production') return undefined
@@ -54,6 +55,7 @@ await app.register(webhooksRouter, { prefix: '/api/webhooks' })
 await app.register(invitesRouter, { prefix: '/api/invites' })
 await app.register(analyticsRouter, { prefix: '/api/analytics' })
 await app.register(adminRouter, { prefix: '/api/admin' })
+await app.register(authRouter, { prefix: '/api/social' })
 
 app.setErrorHandler((rawErr, req, reply) => {
   const err = rawErr as Error & { validation?: unknown; statusCode?: number }

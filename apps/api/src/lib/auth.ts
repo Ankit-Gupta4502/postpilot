@@ -19,6 +19,9 @@ function apexDomain(url: string | undefined): string | undefined {
   }
 }
 
+const resolvedBaseURL = (process.env['BETTER_AUTH_URL'] ?? (process.env['NODE_ENV'] === 'development' ? `http://localhost:${process.env['PORT'] ?? 8080}` : undefined))!
+console.log('[auth] baseURL:', resolvedBaseURL)
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: 'pg',
@@ -30,7 +33,8 @@ export const auth = betterAuth({
     },
   }),
   secret: process.env['BETTER_AUTH_SECRET']!,
-  baseURL: (process.env['BETTER_AUTH_URL'] ?? process.env['APP_BASE_URL'])!,
+  baseURL: resolvedBaseURL,
+  trustedOrigins: [process.env['APP_BASE_URL'] ?? 'http://localhost:5173'],
   emailAndPassword: {
     enabled: true,
   },
@@ -43,6 +47,30 @@ export const auth = betterAuth({
           },
         }
       : {}),
+  },
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          console.log('[auth] creating user:', user.email)
+          return { data: user }
+        },
+        after: async (user) => {
+          console.log('[auth] user created:', user.id, user.email)
+        },
+      },
+    },
+    session: {
+      create: {
+        before: async (session) => {
+          console.log('[auth] creating session for user:', session.userId)
+          return { data: session }
+        },
+        after: async (session) => {
+          console.log('[auth] session created:', session.id)
+        },
+      },
+    },
   },
   session: {
     cookieCache: { enabled: true, maxAge: 300 },

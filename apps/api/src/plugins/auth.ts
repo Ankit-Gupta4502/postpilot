@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
 import fp from 'fastify-plugin'
+import { fromNodeHeaders } from 'better-auth/node'
 import { auth } from '../lib/auth'
 import { db, schema } from '@postpilot/db'
 import { eq, and } from 'drizzle-orm'
@@ -12,25 +13,39 @@ declare module 'fastify' {
   }
 }
 
-/** Convert a Node.js IncomingMessage + raw body into a Fetch API Request for Better Auth. */
-function toFetchRequest(req: FastifyRequest): Request {
-  const url = `${req.protocol}://${req.headers['host'] ?? 'localhost'}${req.url}`
-  const headers = new Headers(req.headers as Record<string, string>)
-  const hasBody = req.method !== 'GET' && req.method !== 'HEAD'
-  return new Request(url, {
-    method: req.method,
-    headers,
-    body: hasBody ? JSON.stringify(req.body) : undefined,
+function applyAuthResponseHeaders(reply: FastifyReply, headers: Headers) {
+  const setCookies = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : []
+  for (const cookie of setCookies) {
+    reply.header('set-cookie', cookie)
+  }
+  headers.forEach((value, key) => {
+    if (key.toLowerCase() !== 'set-cookie') reply.header(key, value)
   })
 }
 
 const plugin: FastifyPluginAsync = async (fastify) => {
-  // Delegate all /api/auth/* to Better Auth
   fastify.all('/api/auth/*', async (req: FastifyRequest, reply: FastifyReply) => {
-    const response = await auth.handler(toFetchRequest(req))
+    const url = new URL(req.url, `${req.protocol}://${req.headers.host}`)
+    req.log.info({ method: req.method, url: url.toString() }, '[auth] incoming request')
+
+    const body = req.method !== 'GET' && req.method !== 'HEAD' && req.body
+      ? JSON.stringify(req.body)
+      : undefined
+
+    const request = new Request(url.toString(), {
+      method: req.method,
+      headers: fromNodeHeaders(req.raw.headers),
+      body,
+    })
+
+    const response = await auth.handler(request)
+    req.log.info({ status: response.status, url: url.toString() }, '[auth] response')
+
     reply.status(response.status)
-    response.headers.forEach((value, key) => reply.header(key, value))
-    return reply.send(response.body)
+    applyAuthResponseHeaders(reply, response.headers)
+
+    const text = await response.text()
+    return reply.send(text || null)
   })
 
   fastify.decorateRequest('userId', null)
@@ -38,7 +53,7 @@ const plugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorateRequest('orgRole', null)
 
   fastify.addHook('preHandler', async (req: FastifyRequest) => {
-    const session = await auth.api.getSession({ headers: req.headers as unknown as Headers })
+    const session = await auth.api.getSession({ headers: fromNodeHeaders(req.raw.headers) })
     if (!session) return
 
     req.userId = session.user.id
