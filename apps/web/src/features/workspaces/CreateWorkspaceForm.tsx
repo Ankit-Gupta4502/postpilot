@@ -1,8 +1,16 @@
-import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Input, Button } from '@postpilot/ui'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Input, Label, Button } from '@postpilot/ui'
 import { apiFetch } from '../../lib/api.js'
 import { queryKeys } from '../../lib/queries.js'
+
+const schema = z.object({
+  name: z.string().min(1, 'Name is required').max(60, 'Name is too long'),
+})
+
+type FormData = z.infer<typeof schema>
 
 interface CreateWorkspaceFormProps {
   orgId: string
@@ -10,45 +18,46 @@ interface CreateWorkspaceFormProps {
 }
 
 export function CreateWorkspaceForm({ orgId, onCreated }: CreateWorkspaceFormProps) {
-  const [name, setName] = useState('')
   const queryClient = useQueryClient()
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({ resolver: zodResolver(schema) })
 
   const mutation = useMutation({
-    mutationFn: () =>
-      apiFetch('/api/workspaces', {
-        method: 'POST',
-        orgId,
-        body: JSON.stringify({ name }),
-      }),
+    mutationFn: (data: FormData) =>
+      apiFetch('/api/workspaces', { method: 'POST', orgId, data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.workspaces(orgId) })
-      setName('')
+      reset()
       onCreated?.()
     },
+    onError: (err: Error) => setError('root', { message: err.message }),
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
-    mutation.mutate()
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
-      <Input
-        placeholder="Workspace name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        disabled={mutation.isPending}
-        className="flex-1"
-      />
-      <Button type="submit" disabled={mutation.isPending || !name.trim()}>
-        {mutation.isPending ? 'Creating…' : 'Create'}
-      </Button>
-      {mutation.isError && (
-        <p className="text-sm text-destructive">
-          {(mutation.error as Error).message}
-        </p>
+    <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="ws-name">Workspace name</Label>
+        <div className="flex gap-2">
+          <Input
+            id="ws-name"
+            placeholder="e.g. Marketing, Product…"
+            disabled={isSubmitting}
+            className="flex-1"
+            {...register('name')}
+          />
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? 'Creating…' : 'Create'}
+          </Button>
+        </div>
+        {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
+      </div>
+      {errors.root && (
+        <p className="text-sm text-destructive">{errors.root.message}</p>
       )}
     </form>
   )

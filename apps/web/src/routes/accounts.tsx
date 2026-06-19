@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { Share2, Layers } from 'lucide-react'
 import { useOrg } from '../lib/org-context'
 import { queries } from '../lib/queries'
 import { Shell } from '../components/layout/Shell'
@@ -11,7 +12,6 @@ export const Route = createFileRoute('/accounts')({
 })
 
 const ALL_PLATFORMS = ['instagram', 'facebook', 'linkedin', 'x', 'youtube']
-
 const API_BASE = import.meta.env['VITE_API_URL'] ?? 'http://localhost:8080'
 
 function AccountsPage() {
@@ -21,6 +21,7 @@ function AccountsPage() {
     queries.socialAccounts(activeWorkspace?.id ?? '', activeOrg?.id ?? '')
   )
 
+  const activeAccounts = accounts.filter((a) => a.status !== 'revoked')
   const connectedPlatforms = new Set(
     accounts.filter((a) => a.status === 'connected').map((a) => a.platform)
   )
@@ -28,37 +29,59 @@ function AccountsPage() {
 
   return (
     <Shell>
-      <div className="max-w-2xl">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight">Social Accounts</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {activeWorkspace ? activeWorkspace.name : 'No workspace selected'}
-          </p>
+      <div className="max-w-4xl">
+        {/* Header */}
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Social Accounts</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {activeWorkspace
+                ? `Connected accounts for ${activeWorkspace.name}`
+                : 'Select a workspace to manage accounts'}
+            </p>
+          </div>
+
+          {!isLoading && activeAccounts.length > 0 && (
+            <div className="flex shrink-0 items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-sm">
+              <Share2 size={14} className="text-muted-foreground" />
+              <span className="font-semibold tabular-nums">{activeAccounts.length}</span>
+              <span className="text-muted-foreground">
+                {activeAccounts.length === 1 ? 'account' : 'accounts'} connected
+              </span>
+            </div>
+          )}
         </div>
 
-        {isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+        {/* Skeleton */}
+        {isLoading && (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-19 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+        )}
 
-        {!isLoading && accounts.filter((a) => a.status !== 'revoked').length > 0 && (
-          <section className="mb-8">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Connected
+        {/* Connected accounts */}
+        {!isLoading && activeAccounts.length > 0 && (
+          <section className="mb-10">
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Connected accounts
             </h2>
-            <div className="space-y-3">
-              {accounts
-                .filter((a) => a.status !== 'revoked')
-                .map((account) => (
-                  <AccountCard key={account.id} account={account} />
-                ))}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {activeAccounts.map((account) => (
+                <AccountCard key={account.id} account={account} />
+              ))}
             </div>
           </section>
         )}
 
+        {/* Add more platforms */}
         {!isLoading && unconnectedPlatforms.length > 0 && activeWorkspace && (
           <section>
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Connect a platform
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              {activeAccounts.length > 0 ? 'Add more platforms' : 'Connect a platform'}
             </h2>
-            <div className="flex flex-wrap gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
               {unconnectedPlatforms.map((platform) => (
                 <ConnectPlatformButton
                   key={platform}
@@ -71,10 +94,15 @@ function AccountsPage() {
           </section>
         )}
 
+        {/* No workspace empty state */}
         {!isLoading && !activeWorkspace && (
-          <p className="text-sm text-muted-foreground">
-            Create a workspace first to connect social accounts.
-          </p>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20 text-center">
+            <Layers size={36} className="mb-4 text-muted-foreground/50" />
+            <p className="font-semibold">No workspace selected</p>
+            <p className="mt-1 max-w-xs text-sm text-muted-foreground">
+              Create or select a workspace first to connect your social accounts.
+            </p>
+          </div>
         )}
       </div>
     </Shell>

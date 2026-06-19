@@ -75,7 +75,7 @@ export function ComposerForm({ workspaceId, orgId, accounts }: ComposerFormProps
       apiFetch<{ id: string }>('/api/posts', {
         method: 'POST',
         orgId,
-        body: JSON.stringify({
+        data: {
           workspaceId,
           content: fullContent,
           accountIds: selectedIds,
@@ -83,7 +83,7 @@ export function ComposerForm({ workspaceId, orgId, accounts }: ComposerFormProps
             scheduleEnabled && scheduledAt ? localToUTC(scheduledAt, timezone) : undefined,
           timezone: scheduleEnabled ? timezone : undefined,
           mediaIds: uploads.map((u) => u.mediaId),
-        }),
+        },
       }),
     onSuccess: () => navigate({ to: '/dashboard' }),
   })

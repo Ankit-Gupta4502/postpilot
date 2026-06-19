@@ -57,6 +57,7 @@ interface OrgContextValue {
   setActiveOrgId: (id: string) => void
   setActiveWorkspaceId: (id: string) => void
   isLoading: boolean
+  isOnboarded: boolean
 }
 
 const OrgContext = createContext<OrgContextValue>({
@@ -67,6 +68,7 @@ const OrgContext = createContext<OrgContextValue>({
   setActiveOrgId: () => {},
   setActiveWorkspaceId: () => {},
   isLoading: true,
+  isOnboarded: false,
 })
 
 export function OrgProvider({ children }: { children: ReactNode }) {
@@ -124,6 +126,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         setActiveOrgId,
         setActiveWorkspaceId,
         isLoading: orgsLoading || wsLoading,
+        isOnboarded: !orgsLoading && !wsLoading && orgs.length > 0 && workspaces.length > 0,
       }}
     >
       {children}

@@ -1,4 +1,4 @@
-import { Button } from '@postpilot/ui'
+import { Plus } from 'lucide-react'
 import { PlatformIcon } from './PlatformIcon'
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -19,13 +19,19 @@ export function ConnectPlatformButton({ platform, workspaceId, apiBaseUrl }: Con
   const label = PLATFORM_LABELS[platform] ?? platform
 
   return (
-    <Button
-      variant="outline"
-      className="gap-2.5"
+    <button
+      type="button"
       onClick={() => { window.location.href = `${apiBaseUrl}/oauth/${platform}/init?workspaceId=${workspaceId}` }}
+      className="group flex w-full flex-col items-center gap-3 rounded-xl border border-border bg-card px-3 py-5 text-center shadow-sm transition-all hover:border-primary/30 hover:bg-accent/40 hover:shadow-md cursor-pointer"
     >
-      <PlatformIcon platform={platform} size="sm" />
-      Connect {label}
-    </Button>
+      <PlatformIcon platform={platform} size="lg" />
+      <div>
+        <p className="text-sm font-medium leading-tight">{label}</p>
+        <p className="mt-1 flex items-center justify-center gap-0.5 text-xs text-muted-foreground group-hover:text-primary transition-colors">
+          <Plus size={11} />
+          Connect
+        </p>
+      </div>
+    </button>
   )
 }

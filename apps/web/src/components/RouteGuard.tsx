@@ -2,27 +2,19 @@ import { useEffect, type ReactNode } from 'react'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { useSession } from '../lib/auth-client'
 import { useAuthStore } from '../lib/auth-store'
+import { useOrg } from '../lib/org-context'
 
-/**
- * Routes that don't require a session.
- * '/' is included so unauthenticated users see the landing page;
- * authenticated users hitting '/' are still redirected to /dashboard.
- */
 const PUBLIC_PATHS = new Set(['/', '/login', '/register', '/forgot-password', '/reset-password'])
 
-/**
- * Single auth guard mounted once in __root.tsx.
- * - Unauthenticated users hitting a protected route → /login
- * - Authenticated users hitting a public route → /dashboard
- * No per-route code needed.
- */
 export function RouteGuard({ children }: { children: ReactNode }) {
   const { data: session, isPending } = useSession()
+  const { isOnboarded, isLoading: orgLoading } = useOrg()
   const navigate = useNavigate()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const { setSession, setHydrated } = useAuthStore()
 
   const isPublic = PUBLIC_PATHS.has(pathname)
+  const isOnboarding = pathname === '/onboarding'
 
   useEffect(() => {
     if (isPending) return
@@ -33,12 +25,22 @@ export function RouteGuard({ children }: { children: ReactNode }) {
 
     if (!user && !isPublic) {
       navigate({ to: '/login', replace: true })
-    } else if (user && isPublic) {
-      navigate({ to: '/dashboard', replace: true })
+      return
     }
-  }, [isPending, session, isPublic])
 
-  // While the first session check is in flight, show nothing (avoids flash)
+    if (user && isPublic) {
+      navigate({ to: '/dashboard', replace: true })
+      return
+    }
+
+    // Wait for org data before checking onboarding state
+    if (user && orgLoading) return
+
+    if (user && !isOnboarded && !isOnboarding) {
+      navigate({ to: '/onboarding', replace: true })
+    }
+  }, [isPending, session, isPublic, isOnboarding, isOnboarded, orgLoading])
+
   if (isPending) {
     return (
       <div className="flex h-screen items-center justify-center">

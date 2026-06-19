@@ -233,3 +233,24 @@ export const queries = {
     enabled: !!workspaceId && !!orgId,
   }),
 } as const
+
+// ─── Mutation factories (pass to useMutation) ─────────────────────────────────
+
+export const mutations = {
+  createOrg: () => ({
+    mutationFn: (name: string) =>
+      apiFetch<{ id: string; name: string }>('/api/orgs', {
+        method: 'POST',
+        data: { name },
+      }),
+  }),
+
+  createWorkspace: (orgId: string) => ({
+    mutationFn: (name: string) =>
+      apiFetch<{ id: string; name: string }>('/api/workspaces', {
+        method: 'POST',
+        orgId,
+        data: { name },
+      }),
+  }),
+} as const

@@ -1,10 +1,10 @@
-import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Trash2 } from 'lucide-react'
-import { Badge, Input, Button } from '@postpilot/ui'
+import { Badge } from '@postpilot/ui'
 import { apiFetch } from '../../lib/api.js'
 import { useSession } from '../../lib/auth-client.js'
 import { queries, queryKeys } from '../../lib/queries.js'
+import { InviteMemberForm } from './InviteMemberForm.js'
 
 interface MembersTabProps {
   orgId: string
@@ -21,10 +21,6 @@ const ROLE_COLORS: Record<string, string> = {
 export function MembersTab({ orgId, orgRole }: MembersTabProps) {
   const { data: session } = useSession()
   const queryClient = useQueryClient()
-  const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<'admin' | 'billing' | 'member'>('member')
-  const [inviteError, setInviteError] = useState<string | null>(null)
-  const [inviteSuccess, setInviteSuccess] = useState(false)
 
   const { data: members = [], isLoading } = useQuery(queries.orgMembers(orgId))
 
@@ -32,23 +28,6 @@ export function MembersTab({ orgId, orgRole }: MembersTabProps) {
     mutationFn: (userId: string) =>
       apiFetch(`/api/orgs/members/${userId}`, { method: 'DELETE', orgId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.orgMembers(orgId) }),
-  })
-
-  const inviteMutation = useMutation({
-    mutationFn: () =>
-      apiFetch('/api/invites', {
-        method: 'POST',
-        orgId,
-        body: JSON.stringify({ email: inviteEmail, role: inviteRole }),
-      }),
-    onSuccess: () => {
-      setInviteEmail('')
-      setInviteError(null)
-      setInviteSuccess(true)
-      setTimeout(() => setInviteSuccess(false), 3000)
-      queryClient.invalidateQueries({ queryKey: queryKeys.orgInvites(orgId) })
-    },
-    onError: (err: Error) => setInviteError(err.message),
   })
 
   const canManage = ['owner', 'admin'].includes(orgRole)
@@ -59,54 +38,22 @@ export function MembersTab({ orgId, orgRole }: MembersTabProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {canManage && (
-        <div className="rounded-lg border bg-card p-4">
-          <h3 className="mb-3 text-sm font-medium">Invite a member</h3>
-          <div className="flex gap-2">
-            <Input
-              type="email"
-              placeholder="colleague@example.com"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              className="flex-1"
-            />
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as typeof inviteRole)}
-              className="rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-            >
-              <option value="member">Member</option>
-              <option value="admin">Admin</option>
-              <option value="billing">Billing</option>
-            </select>
-            <Button
-              onClick={() => inviteMutation.mutate()}
-              disabled={inviteMutation.isPending || !inviteEmail.trim()}
-            >
-              {inviteMutation.isPending ? 'Sending…' : 'Invite'}
-            </Button>
-          </div>
-          {inviteError && <p className="mt-2 text-sm text-destructive">{inviteError}</p>}
-          {inviteSuccess && (
-            <p className="mt-2 text-sm text-green-600">Invite sent successfully!</p>
-          )}
-        </div>
-      )}
+      {canManage && <InviteMemberForm orgId={orgId} />}
 
       <div className="flex flex-col gap-2">
         {members.map((member) => (
           <div
             key={member.id}
-            className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3"
+            className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3"
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
               {member.user.name ? member.user.name[0]?.toUpperCase() : member.user.email[0]?.toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{member.user.name || '(no name)'}</p>
               <p className="truncate text-xs text-muted-foreground">{member.user.email}</p>
             </div>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ROLE_COLORS[member.role] ?? ''}`}>
+            <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${ROLE_COLORS[member.role] ?? ''}`}>
               {member.role}
             </span>
             {canManage && member.role !== 'owner' && member.userId !== session?.user.id && (
@@ -115,7 +62,7 @@ export function MembersTab({ orgId, orgRole }: MembersTabProps) {
                 onClick={() => removeMutation.mutate(member.userId)}
                 disabled={removeMutation.isPending}
                 title="Remove member"
-                className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                className="shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
               >
                 <Trash2 size={14} />
               </button>

@@ -1,61 +1,74 @@
-import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Input } from '@postpilot/ui'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Input, Label, Button } from '@postpilot/ui'
 import { authClient } from '../../lib/auth-client'
+
+const schema = z
+  .object({
+    password: z.string().min(8, 'Must be at least 8 characters'),
+    confirm: z.string(),
+  })
+  .refine((d) => d.password === d.confirm, {
+    message: "Passwords don't match",
+    path: ['confirm'],
+  })
+
+type FormData = z.infer<typeof schema>
 
 export function ResetPasswordForm({ token }: { token: string }) {
   const navigate = useNavigate()
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({ resolver: zodResolver(schema) })
 
-  const mismatch = confirm.length > 0 && password !== confirm
-  const weak = password.length > 0 && password.length < 8
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (mismatch || weak) return
-    setError('')
-    setLoading(true)
-    const { error: err } = await authClient.resetPassword({ newPassword: password, token })
-    setLoading(false)
-    if (err) {
-      setError(err.message ?? 'Reset failed — the link may have expired')
+  const onSubmit = async (data: FormData) => {
+    const { error } = await authClient.resetPassword({ newPassword: data.password, token })
+    if (error) {
+      setError('root', { message: error.message ?? 'Reset failed — the link may have expired' })
     } else {
       navigate({ to: '/login', replace: true })
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label className="mb-1 block text-sm font-medium">New password</label>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="reset-password">New password</Label>
         <Input
+          id="reset-password"
           type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
           placeholder="At least 8 characters"
-          required
-          disabled={loading}
+          autoComplete="new-password"
+          {...register('password')}
         />
-        {weak && <p className="mt-1 text-xs text-destructive">Must be at least 8 characters</p>}
+        {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
       </div>
-      <div>
-        <label className="mb-1 block text-sm font-medium">Confirm password</label>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="reset-confirm">Confirm password</Label>
         <Input
+          id="reset-confirm"
           type="password"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
           placeholder="Repeat password"
-          required
-          disabled={loading}
+          autoComplete="new-password"
+          {...register('confirm')}
         />
-        {mismatch && <p className="mt-1 text-xs text-destructive">Passwords don't match</p>}
+        {errors.confirm && <p className="text-xs text-destructive">{errors.confirm.message}</p>}
       </div>
-      {error && <p className="text-sm text-destructive">{error}</p>}
-      <Button type="submit" className="w-full" disabled={loading || mismatch || weak || !password}>
-        {loading ? 'Resetting…' : 'Set new password'}
+
+      {errors.root && (
+        <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {errors.root.message}
+        </p>
+      )}
+
+      <Button type="submit" className="w-full" disabled={isSubmitting}>
+        {isSubmitting ? 'Resetting…' : 'Set new password'}
       </Button>
     </form>
   )

@@ -32,7 +32,7 @@ export function WorkspaceCard({ workspace, isActive, onSelect }: WorkspaceCardPr
       apiFetch(`/api/workspaces/${workspace.id}`, {
         method: 'PATCH',
         orgId: activeOrg?.id,
-        body: JSON.stringify({ name }),
+        data: { name },
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.workspaces() })

@@ -1,54 +1,52 @@
-import { useState } from 'react'
 import { useNavigate, Link } from '@tanstack/react-router'
-import { Input } from '@postpilot/ui'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { Input, Label, Button } from '@postpilot/ui'
 import { authClient } from '../../lib/auth-client.js'
+
+const schema = z.object({
+  email: z.string().email('Enter a valid email'),
+  password: z.string().min(1, 'Password is required'),
+})
+
+type FormData = z.infer<typeof schema>
 
 export function EmailSignInForm() {
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<FormData>({ resolver: zodResolver(schema) })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setLoading(true)
-    try {
-      const { error: authError } = await authClient.signIn.email({ email, password })
-      if (authError) {
-        setError(authError.message ?? 'Invalid email or password')
-      } else {
-        navigate({ to: '/dashboard' })
-      }
-    } catch {
-      setError('Something went wrong. Please try again.')
-    } finally {
-      setLoading(false)
+  const onSubmit = async (data: FormData) => {
+    const { error } = await authClient.signIn.email(data)
+    if (error) {
+      setError('root', { message: error.message ?? 'Invalid email or password' })
+    } else {
+      navigate({ to: '/dashboard' })
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="signin-email" className="text-sm font-medium text-foreground">
-          Email
-        </label>
+        <Label htmlFor="signin-email">Email</Label>
         <Input
           id="signin-email"
           type="email"
           placeholder="you@example.com"
           autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
+          {...register('email')}
         />
+        {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
       </div>
+
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <label htmlFor="signin-password" className="text-sm font-medium text-foreground">
-            Password
-          </label>
+          <Label htmlFor="signin-password">Password</Label>
           <Link
             to="/forgot-password"
             className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
@@ -61,21 +59,20 @@ export function EmailSignInForm() {
           type="password"
           placeholder="••••••••"
           autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
+          {...register('password')}
         />
+        {errors.password && <p className="text-xs text-destructive">{errors.password.message}</p>}
       </div>
-      {error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+
+      {errors.root && (
+        <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {errors.root.message}
+        </p>
       )}
-      <button
-        type="submit"
-        disabled={loading}
-        className="mt-1 flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
-      >
-        {loading ? 'Signing in…' : 'Sign in'}
-      </button>
+
+      <Button type="submit" disabled={isSubmitting} className="mt-1 w-full">
+        {isSubmitting ? 'Signing in…' : 'Sign in'}
+      </Button>
     </form>
   )
 }

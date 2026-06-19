@@ -18,17 +18,18 @@ const ICONS: Record<string, LucideIcon> = {
 
 interface PlatformIconProps {
   platform: string
-  size?: 'sm' | 'md'
+  size?: 'sm' | 'md' | 'lg'
 }
 
 export function PlatformIcon({ platform, size = 'md' }: PlatformIconProps) {
   const bg = COLORS[platform] ?? 'bg-muted'
-  const dim = size === 'sm' ? 'h-7 w-7' : 'h-9 w-9'
-  const iconSize = size === 'sm' ? 14 : 18
+  const dim = size === 'sm' ? 'h-7 w-7' : size === 'lg' ? 'h-14 w-14' : 'h-10 w-10'
+  const iconSize = size === 'sm' ? 14 : size === 'lg' ? 26 : 18
+  const radius = size === 'lg' ? 'rounded-2xl' : 'rounded-xl'
   const Icon = ICONS[platform]
 
   return (
-    <span className={`${dim} ${bg} inline-flex shrink-0 items-center justify-center rounded-full`}>
+    <span className={`${dim} ${bg} ${radius} inline-flex shrink-0 items-center justify-center`}>
       {Icon ? (
         <Icon size={iconSize} color="white" strokeWidth={1.5} />
       ) : (
