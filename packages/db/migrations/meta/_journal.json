@@ -15,6 +15,13 @@
       "when": 1781890205000,
       "tag": "0001_platform_drafts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781890759418,
+      "tag": "0002_sweet_sentinels",
+      "breakpoints": true
     }
   ]
 }
