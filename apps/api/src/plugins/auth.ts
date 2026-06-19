@@ -14,7 +14,7 @@ declare module 'fastify' {
 
 /** Convert a Node.js IncomingMessage + raw body into a Fetch API Request for Better Auth. */
 function toFetchRequest(req: FastifyRequest): Request {
-  const url = `http://${req.headers['host'] ?? 'localhost'}${req.url}`
+  const url = `${req.protocol}://${req.headers['host'] ?? 'localhost'}${req.url}`
   const headers = new Headers(req.headers as Record<string, string>)
   const hasBody = req.method !== 'GET' && req.method !== 'HEAD'
   return new Request(url, {

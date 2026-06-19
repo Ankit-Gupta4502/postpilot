@@ -30,7 +30,7 @@ export const auth = betterAuth({
     },
   }),
   secret: process.env['BETTER_AUTH_SECRET']!,
-  baseURL: (process.env['BETTER_AUTH_URL'] ?? (process.env['NODE_ENV'] === 'development' ? 'http://localhost:5173' : undefined))!,
+  baseURL: (process.env['BETTER_AUTH_URL'] ?? process.env['APP_BASE_URL'])!,
   emailAndPassword: {
     enabled: true,
   },
