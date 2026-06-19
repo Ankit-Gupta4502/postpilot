@@ -14,14 +14,31 @@
 > consumers). Sections 21–32 are the v4 layer; where they conflict with an earlier section, the
 > v4 section supersedes it, and the earlier section is annotated inline.
 >
-> **Implementation status (as of 2026-06-19):** All schema, adapters, API routes, and core
-> frontend UI are implemented through Phase 12. Completed: all queue-worker handlers
-> (syncPosts, analytics, webhook), scheduler jobs (tokenRefresh, leaseRecovery, adaptive
-> analytics), billing orders + webhook state machine, analytics dashboard API, social accounts
-> UI, post composer UI, email/password + Google auth, workspace management UI, org settings UI
-> (members / invites / billing). Remaining: full Meta-webhook event processing, analytics
-> dashboard UI (charts), backfill handler, DLQ admin, white-label subdomain routing, approval
-> workflow, KV rate limiting.
+> **Implementation status (as of 2026-06-19, Phase 14 complete):** All schema, adapters, API
+> routes, queue-worker handlers, scheduler jobs, and frontend UI are fully implemented.
+>
+> **Completed through Phase 14:**
+> - All queue-worker handlers: publish (idempotent, lease-aware), syncPosts (checkpoint), analytics
+>   (append-only snapshots), webhook (Meta entry-array processing → syncPosts trigger), backfill
+>   (full history pagination, up to 100 pages per account)
+> - Scheduler jobs: tokenRefresh, leaseRecovery, adaptive analytics (hot/warm/cold cadence),
+>   scheduledPublish, planReconciliation
+> - Billing: Razorpay subscriptions + orders + full webhook state machine
+> - Analytics dashboard API (snapshots, posts, summary) + UI (recharts LineChart, TopPostsTable,
+>   SummaryCards, AccountSelector)
+> - Social accounts UI, post composer UI, email/password + Google auth
+> - Workspace management UI, org settings UI (Members / Invites / Billing tabs — shadcn Tabs)
+> - Admin DLQ interface: GET list + POST replay/discard (owner/admin only), UI with tab switcher
+> - KV rate limiting (§12): `rate-limit.ts` module in queue-worker — `isRateLimited` /
+>   `recordRateLimit` / `clearRateLimit`; wired into publishHandler and syncPostsHandler;
+>   graceful no-op when KV not configured
+> - Backfill trigger endpoint: `POST /api/social-accounts/:accountId/backfill`
+> - Frontend conventions: shared `lib/format.ts` (fmtCount/fmtDate/fmtDateTime/fmtDateKey),
+>   shadcn Table and Tabs in `@postpilot/ui`, documented in FRONTEND.md
+> - Root turbo scripts fixed; drizzle-orm aligned to 0.45.2 across all apps
+>
+> **Remaining (not yet implemented):**
+> - Approval workflow (approver role, post approval state machine)
 >
 > Design intent and core principles from v1 are preserved.
 
@@ -38,8 +55,7 @@ teams need to keep separate:
   An agency org may have one workspace per client.
 
 A user joins an **org**. Within that org they are granted access to one or more **workspaces**.
-This split is what makes agencies, white-label, and per-client separation work without
-duplicating accounts.
+This split is what makes agencies and per-client separation work without duplicating accounts.
 
 ```
 Org (billing, identity)
@@ -89,7 +105,7 @@ New principle added in v2:
 ```sql
 id              uuid pk
 name            text not null
-slug            text unique not null      -- white-label subdomain / URL
+slug            text unique not null      -- org URL identifier (invite links, future subdomain)
 owner_user_id   uuid not null             -- the one user who can never be removed
 plan            text not null default 'free'  -- free | starter | pro | agency
 plan_status     text not null default 'active' -- active | past_due | cancelled
@@ -365,6 +381,11 @@ After the configured retry count (3), the queue's dead-letter target writes here
 admin screen can inspect and **replay** (re-enqueue payload) or **discard**. Alerting fires on
 new `open` rows.
 
+> **Implemented (Phase 14):** `GET /api/admin/dlq`, `POST /api/admin/dlq/:id/replay`,
+> `POST /api/admin/dlq/:id/discard` — owner/admin only. Frontend at `/admin` (shadcn Tabs:
+> Open / Replayed / Discarded). Replay re-enqueues the original payload to `source_queue`
+> via the CF Queues push client.
+
 ## 5.9 audit_log (NEW — needed once teams exist)
 ```sql
 id          uuid pk
@@ -427,6 +448,11 @@ since_id/pagination_token; YouTube page_token/published_after; LinkedIn offset/p
 `publish_queue` (highest priority), `scheduled_publish_queue`, `sync_posts_queue` (6h),
 `analytics_queue` (6h), `token_refresh_queue` (daily), `webhook_queue`,
 `backfill_queue` (lowest). Every queue has a dead-letter target → `dead_letter_jobs`.
+
+> **Implemented (Phase 14):** `backfillHandler` in `apps/queue-worker/src/handlers/backfill.ts`
+> paginates through all platform post pages (up to `MAX_PAGES = 100`) using the same adapter
+> cursor pattern as `syncPostsHandler`, upserting `platform_posts` and persisting the final
+> checkpoint. Triggered via `POST /api/social-accounts/:accountId/backfill` (202 Accepted).
 
 > **v4 updates:** (a) consumers are now **pull-based Fastify workers** over the Cloudflare Queues
 > HTTP Pull API — Cloudflare Workers are no longer used (§31). (b) `analytics_queue` cadence is
@@ -500,6 +526,14 @@ is **advisory only**: the true limiter is the platform's own 429 response, which
 honor (delay / retry / exponential backoff). KV reduces wasted calls; it is never trusted as a
 hard counter.
 
+> **Implemented (Phase 14):** `apps/queue-worker/src/lib/rate-limit.ts` — Cloudflare KV REST
+> client with `isRateLimited(accountId)`, `recordRateLimit(accountId, resetAtMs?)`,
+> `clearRateLimit(accountId)`. Default reset window is 15 minutes when the platform does not
+> provide a `Retry-After` header. Gracefully no-ops when `KV_NAMESPACE_ID` is not set.
+> Wired into `publishHandler` (releases lease + marks retrying on 429) and `syncPostsHandler`
+> (skips sync entirely if limited). `clearRateLimit` is not yet called on success — that is
+> left to future work once per-platform quota tracking is in place.
+
 ---
 
 # 13. Disconnect & Cleanup (GAP FIXED — was undefined)
@@ -552,7 +586,6 @@ users. Pricing is dimensioned on value drivers, **never on imported post count**
 | First-import depth | latest 20 | latest 20 | latest 20 | latest 20 |
 | Teams / roles | — | — | yes | yes |
 | Approval workflows | — | — | — | yes |
-| White-label (slug) | — | — | — | yes |
 
 Billing axes: connected accounts, members, analytics retention, scheduling limits, workspace
 count. Historical import volume is **explicitly not** a billing axis (principle: imports are
@@ -568,7 +601,7 @@ max_workspaces  int
 max_members     int
 max_scheduled   int              -- null = unlimited
 analytics_retention_days int
-features        jsonb            -- { teams:bool, approvals:bool, white_label:bool }
+features        jsonb            -- { teams:bool, approvals:bool }
 ```
 `organizations.plan` + `plan_status` (from §3.1) point at the active row. A short-TTL KV entry
 `plan_limits:{plan}` caches it; PostgreSQL remains source of truth.
@@ -586,7 +619,7 @@ connect social account → COUNT social_accounts WHERE org_id AND status!='revok
 invite member          → COUNT active org_members < max_members  else 402
 create workspace       → COUNT workspaces < max_workspaces      else 402
 schedule post          → COUNT posts status='scheduled' < max_scheduled (if not null) else 402
-use teams/approvals    → require plan_limits.features flag       else 402 FEATURE_LOCKED
+use teams/approvals    → require plan_limits.features.teams / .approvals flag  else 402 FEATURE_LOCKED
 ```
 The API returns `402 Payment Required` with a machine-readable `{ code, limit, current, plan }`
 so the frontend can show the right upgrade prompt.
@@ -904,7 +937,7 @@ classify the incoming action:
                                                                     free-tier caps, not blocked outright
   GUARDED_WRITE   (connect account, invite member, create
                    workspace, schedule beyond free cap, use
-                   teams/approvals/white-label)                  → require plan_status='active'
+                   teams/approvals features)                     → require plan_status='active'
                                                                     AND §16.3 plan-limit gate
 
 if GUARDED_WRITE and plan_status in ('past_due','expired','cancelled-past-period'):
@@ -1021,8 +1054,7 @@ META_APP_SECRET=                       # HMAC verification of Meta webhooks
 EMAIL_FROM=no-reply@example.com
 SMTP_URL=                              # or provider API key, e.g. RESEND_API_KEY / POSTMARK_TOKEN
 
-# ── Observability (optional but recommended) ───────────
-SENTRY_DSN=
+# ── Observability ──────────────────────────────────────
 LOG_LEVEL=info
 
 # ── Scheduled jobs / cron (§18) ────────────────────────

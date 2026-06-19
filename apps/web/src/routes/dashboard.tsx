@@ -3,8 +3,8 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { FileText, CheckCircle2, Clock, Link2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@postpilot/ui'
-import { apiFetch } from '../lib/api'
 import { useOrg } from '../lib/org-context'
+import { queries } from '../lib/queries'
 import { Shell } from '../components/layout/Shell'
 
 export const Route = createFileRoute('/dashboard')({
@@ -41,24 +41,11 @@ function StatCard({
 
 function DashboardPage() {
   const { activeOrg, activeWorkspace } = useOrg()
+  const wsId = activeWorkspace?.id ?? ''
+  const orgId = activeOrg?.id ?? ''
 
-  const { data: accounts = [] } = useQuery({
-    queryKey: ['social-accounts', activeWorkspace?.id],
-    queryFn: () =>
-      apiFetch<{ id: string; status: string }[]>(`/api/social-accounts/${activeWorkspace!.id}`, {
-        orgId: activeOrg!.id,
-      }),
-    enabled: !!activeOrg && !!activeWorkspace,
-  })
-
-  const { data: posts = [] } = useQuery({
-    queryKey: ['posts', activeWorkspace?.id],
-    queryFn: () =>
-      apiFetch<{ id: string; status: string }[]>(`/api/posts?workspaceId=${activeWorkspace!.id}`, {
-        orgId: activeOrg!.id,
-      }),
-    enabled: !!activeOrg && !!activeWorkspace,
-  })
+  const { data: accounts = [] } = useQuery(queries.socialAccounts(wsId, orgId))
+  const { data: posts = [] } = useQuery(queries.posts(wsId, orgId))
 
   const connectedAccounts = accounts.filter((a) => a.status === 'connected').length
   const scheduledPosts = posts.filter((p) => p.status === 'scheduled').length
@@ -74,34 +61,10 @@ function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          title="Total Posts"
-          value={posts.length}
-          icon={<FileText size={18} />}
-          iconBg="bg-primary/10"
-          iconColor="text-primary"
-        />
-        <StatCard
-          title="Published"
-          value={publishedPosts}
-          icon={<CheckCircle2 size={18} />}
-          iconBg="bg-emerald-50"
-          iconColor="text-emerald-600"
-        />
-        <StatCard
-          title="Scheduled"
-          value={scheduledPosts}
-          icon={<Clock size={18} />}
-          iconBg="bg-amber-50"
-          iconColor="text-amber-600"
-        />
-        <StatCard
-          title="Connected"
-          value={connectedAccounts}
-          icon={<Link2 size={18} />}
-          iconBg="bg-sky-50"
-          iconColor="text-sky-600"
-        />
+        <StatCard title="Total Posts" value={posts.length} icon={<FileText size={18} />} iconBg="bg-primary/10" iconColor="text-primary" />
+        <StatCard title="Published" value={publishedPosts} icon={<CheckCircle2 size={18} />} iconBg="bg-emerald-50" iconColor="text-emerald-600" />
+        <StatCard title="Scheduled" value={scheduledPosts} icon={<Clock size={18} />} iconBg="bg-amber-50" iconColor="text-amber-600" />
+        <StatCard title="Connected" value={connectedAccounts} icon={<Link2 size={18} />} iconBg="bg-sky-50" iconColor="text-sky-600" />
       </div>
     </Shell>
   )

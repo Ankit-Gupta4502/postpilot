@@ -4,27 +4,18 @@ import { Shell } from '../components/layout/Shell.js'
 import { WorkspaceCard } from '../features/workspaces/WorkspaceCard.js'
 import { CreateWorkspaceForm } from '../features/workspaces/CreateWorkspaceForm.js'
 import { useOrg } from '../lib/org-context.js'
-import { apiFetch } from '../lib/api.js'
+import { queries } from '../lib/queries.js'
 
 export const Route = createFileRoute('/workspaces')({
   component: WorkspacesPage,
 })
 
-interface Workspace {
-  id: string
-  name: string
-  role: string
-  createdAt: string | null
-}
-
 function WorkspacesPage() {
   const { activeOrg, activeWorkspace, setActiveWorkspaceId } = useOrg()
 
-  const { data: workspaces = [], isLoading } = useQuery<Workspace[]>({
-    queryKey: ['workspaces', activeOrg?.id],
-    queryFn: () => apiFetch('/api/workspaces', { orgId: activeOrg!.id }),
-    enabled: !!activeOrg?.id,
-  })
+  const { data: workspaces = [], isLoading } = useQuery(
+    queries.workspaces(activeOrg?.id ?? '')
+  )
 
   return (
     <Shell>
@@ -44,9 +35,7 @@ function WorkspacesPage() {
         )}
 
         <div className="flex flex-col gap-2">
-          {isLoading && (
-            <p className="text-sm text-muted-foreground">Loading workspaces…</p>
-          )}
+          {isLoading && <p className="text-sm text-muted-foreground">Loading workspaces…</p>}
           {!isLoading && workspaces.length === 0 && (
             <div className="rounded-lg border border-dashed border-border p-8 text-center">
               <p className="text-sm text-muted-foreground">No workspaces yet. Create your first one above.</p>

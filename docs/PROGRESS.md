@@ -1,6 +1,6 @@
 # PostPilot — Build Progress
 
-_Last updated: 2026-06-19 (Phase 12 complete)_
+_Last updated: 2026-06-19 (Phase 15 complete)_
 
 ## Legend
 - [x] Done — scaffolded / implemented
@@ -269,22 +269,86 @@ Platform adapter layer shared by `apps/api` and `apps/queue-worker`.
 
 ---
 
+---
+
+## Phase 13: Meta Webhook Processing + Analytics Dashboard UI ✅ (NEW)
+
+### Backend
+- [x] **webhookHandler Meta processing** — parses `entry[]` array from Meta webhook payload, looks up social account by `platformAccountId` + platform, calls `syncPostsHandler` directly for each matched account (apps/queue-worker/src/handlers/webhook.ts)
+- [x] **drizzle-orm version alignment** — bumped queue-worker from `^0.44.1` to `^0.45.2` to match packages/db (eliminates all pre-existing tsc errors)
+
+### UI — packages/ui
+- [x] **chart.tsx** — shadcn chart component (recharts-based: ChartContainer, ChartTooltip, ChartLegend) added to `@postpilot/ui` and exported from index.ts
+
+### UI — apps/web
+- [x] **features/analytics/AccountSelector.tsx** — pill buttons to switch between connected accounts
+- [x] **features/analytics/SummaryCards.tsx** — 4 stat cards: Total Posts, Total Likes, Comments, Shares/Views
+- [x] **features/analytics/EngagementChart.tsx** — recharts LineChart (likes/comments/shares) with day-bucketed aggregation, empty state, loading state
+- [x] **features/analytics/TopPostsTable.tsx** — top 20 posts sorted by likes, formatted engagement counts
+- [x] **routes/analytics.tsx** — `/analytics` page: account selector → summary cards → engagement chart → posts table
+- [x] **Sidebar** — added Analytics nav item (`BarChart2` icon)
+- [x] **routeTree.gen.ts** — added `/analytics` route
+
+---
+
+## Phase 14: Backfill + Admin DLQ + KV Rate Limiting ✅ (NEW)
+
+### Backfill queue + handler
+- [x] **backfillHandler** — paginates through ALL platform post pages (up to 100), same upsert logic as syncPostsHandler with cursor tracking (apps/queue-worker/src/handlers/backfill.ts)
+- [x] **worker.ts** — registered `BACKFILL` queue handler
+- [x] **POST /api/social-accounts/:accountId/backfill** — validates account ownership + connected status, enqueues to `backfill_queue`, returns 202 (apps/api/src/routes/social-accounts.ts)
+
+### Admin DLQ interface
+- [x] **GET /api/admin/dlq** — lists dead_letter_jobs filtered by status (open/replayed/discarded), owner/admin only (apps/api/src/routes/admin.ts)
+- [x] **POST /api/admin/dlq/:id/replay** — re-enqueues payload to source queue, marks replayed
+- [x] **POST /api/admin/dlq/:id/discard** — marks discarded, no re-enqueue
+- [x] **features/admin/DlqTable.tsx** — card-per-job with replay/discard buttons, expandable payload viewer, status badges (apps/web/src/features/admin/DlqTable.tsx)
+- [x] **routes/admin.tsx** — `/admin` page with Open/Replayed/Discarded tab switcher, owner/admin guard
+- [x] **Sidebar** — Admin nav item (`ShieldAlert` icon)
+- [x] **routeTree.gen.ts** — `/admin` route registered
+
+### KV rate limiting (§12)
+- [x] **apps/queue-worker/src/lib/rate-limit.ts** — Cloudflare KV REST client: `isRateLimited()`, `recordRateLimit()`, `clearRateLimit()`; key: `rate_limit:{socialAccountId}`, graceful no-op when KV not configured
+- [x] **publishHandler** — checks `isRateLimited()` before adapter.publish(); catches 429/rate-limit errors → `recordRateLimit()`, status=retrying
+- [x] **syncPostsHandler** — checks `isRateLimited()` before adapter.syncPosts(); catches 429 → `recordRateLimit()`
+
+### Infrastructure
+- [x] drizzle-orm version skew fixed monorepo-wide (0.44.x → 0.45.2 everywhere)
+- [x] Root package.json scripts fixed (build/dev/lint/clean now use `turbo run` not recursive `pnpm run`)
+- [x] `pnpm install` run to restore missing symlinks in apps/api/node_modules
+
+---
+
 ## Next Up — Implementation TODOs
 
-### High Priority
-- [ ] syncPostsHandler Meta-webhook full processing (parse entry array → trigger per-account sync)
+---
 
-### Medium Priority
-- [ ] Analytics dashboard UI (charts, post metrics, account summary)
+## Phase 15: Composer Polish + Auth Guards + Forgot Password ✅ (NEW)
 
-### Lower Priority
-- [ ] Backfill queue + handler (import full post history)
-- [ ] Admin DLQ interface (replay/discard dead_letter_jobs)
-- [ ] White-label subdomain routing (Agency plan)
+### Composer improvements
+- [x] **PlatformCheckbox** — `@username` secondary line, health status dot (green/amber/red) overlaid on platform icon, platform name label on right, `healthStatus` prop wired (apps/web/src/features/accounts/PlatformCheckbox.tsx)
+- [x] **PlatformSelector** — "Select all / Deselect all" toggle button when >1 account (apps/web/src/features/accounts/PlatformSelector.tsx)
+- [x] **HashtagInput** — chip-style tag input: type + Enter/Space to add, Backspace to remove last, per-platform limits (IG 30, LI 3, YT 15), sanitises input (strips spaces/symbols) (apps/web/src/features/compose/HashtagInput.tsx)
+- [x] **ComposerForm** — hashtag section wired: tags appended to full content on submit; per-platform character count breakdown row (shows X: 45/280, Instagram: 45/2200 etc.) with destructive colour on overrun; field label changed to "Caption" (apps/web/src/features/compose/ComposerForm.tsx)
+
+### Auth guards (one place, zero per-route code)
+- [x] **Zustand auth store** — `useAuthStore` with `persist` middleware; stores `isAuthed`, `userId`, `userName`, `userEmail` in localStorage as optimistic cache (apps/web/src/lib/auth-store.ts)
+- [x] **RouteGuard** — single component mounted once in `__root.tsx` wrapping the `<Outlet>`; reads `useSession()` + current pathname; unauthenticated → `/login`, authenticated on public route → `/dashboard`; shows spinner while session resolves (apps/web/src/components/RouteGuard.tsx)
+- [x] **PUBLIC_PATHS** — `/login`, `/register`, `/forgot-password`, `/reset-password`
+
+### Forgot / reset password flow
+- [x] **ForgotPasswordForm** — calls `authClient.requestPasswordReset({ email, redirectTo })`, shows success state (apps/web/src/features/auth/ForgotPasswordForm.tsx)
+- [x] **ResetPasswordForm** — calls `authClient.resetPassword({ newPassword, token })`; client-side length + match validation; redirects to `/login` on success (apps/web/src/features/auth/ResetPasswordForm.tsx)
+- [x] **routes/forgot-password.tsx** — `/forgot-password` page
+- [x] **routes/reset-password.tsx** — `/reset-password?token=xxx` page; validates token presence
+- [x] **EmailSignInForm** — "Forgot password?" link added beside Password label
+
+### Workspace rename
+- [x] **WorkspaceCard** — inline pencil-icon rename: click edit → Input replaces name text; Enter saves, Escape cancels; only shown for admin/owner role (apps/web/src/features/workspaces/WorkspaceCard.tsx)
+- [x] **PATCH /api/workspaces/:workspaceId** — workspace admin or org admin/owner can rename; trims name, updates `updatedAt` (apps/api/src/routes/workspaces.ts)
+
+### Remaining
 - [ ] Approval workflow (approver role, post approval state)
-- [ ] Rate limiting per social_account_id via KV (§12)
-- [ ] Sentry error tracking integration
-- [ ] E2E tests (Playwright)
 
 ---
 

@@ -2,6 +2,37 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from '
 import { useQuery } from '@tanstack/react-query'
 import { useSession } from './auth-client'
 import { apiFetch } from './api'
+import { storage } from './storage'
+
+/**
+ * Auto-selects the first org (if none stored) and the first workspace
+ * (if none stored or after an org switch). Combines both effects in one
+ * hook so OrgProvider stays clean.
+ */
+function useAutoSelect(
+  orgs: Org[],
+  activeOrgId: string | null,
+  setOrgId: (id: string) => void,
+  workspaces: Workspace[],
+  activeWorkspaceId: string | null,
+  setWorkspaceId: (id: string) => void,
+) {
+  useEffect(() => {
+    if (orgs.length > 0 && !activeOrgId) {
+      const id = orgs[0]!.id
+      setOrgId(id)
+      storage.set('activeOrgId', id)
+    }
+  }, [orgs, activeOrgId])
+
+  useEffect(() => {
+    if (workspaces.length > 0 && !activeWorkspaceId) {
+      const id = workspaces[0]!.id
+      setWorkspaceId(id)
+      storage.set('activeWorkspaceId', id)
+    }
+  }, [workspaces, activeWorkspaceId])
+}
 
 export interface Org {
   id: string
@@ -40,11 +71,12 @@ const OrgContext = createContext<OrgContextValue>({
 
 export function OrgProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession()
-  const [activeOrgId, setActiveOrgIdState] = useState<string | null>(() =>
-    typeof localStorage !== 'undefined' ? localStorage.getItem('activeOrgId') : null
+
+  const [activeOrgId, setActiveOrgIdState] = useState<string | null>(
+    () => storage.get('activeOrgId')
   )
-  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(() =>
-    typeof localStorage !== 'undefined' ? localStorage.getItem('activeWorkspaceId') : null
+  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(
+    () => storage.get('activeWorkspaceId')
   )
 
   const { data: orgs = [], isLoading: orgsLoading } = useQuery({
@@ -61,34 +93,25 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     enabled: !!activeOrg,
   })
 
-  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null
+  const activeWorkspace =
+    workspaces.find((w) => w.id === activeWorkspaceId) ?? workspaces[0] ?? null
 
-  useEffect(() => {
-    if (orgs.length > 0 && !activeOrgId) {
-      const id = orgs[0]!.id
-      setActiveOrgIdState(id)
-      localStorage.setItem('activeOrgId', id)
-    }
-  }, [orgs, activeOrgId])
-
-  useEffect(() => {
-    if (workspaces.length > 0 && !activeWorkspaceId) {
-      const id = workspaces[0]!.id
-      setActiveWorkspaceIdState(id)
-      localStorage.setItem('activeWorkspaceId', id)
-    }
-  }, [workspaces, activeWorkspaceId])
+  useAutoSelect(
+    orgs, activeOrgId, setActiveOrgIdState,
+    workspaces, activeWorkspaceId, setActiveWorkspaceIdState,
+  )
 
   function setActiveOrgId(id: string) {
     setActiveOrgIdState(id)
-    localStorage.setItem('activeOrgId', id)
+    storage.set('activeOrgId', id)
+    // Clear workspace so the new org's first workspace is auto-selected
     setActiveWorkspaceIdState(null)
-    localStorage.removeItem('activeWorkspaceId')
+    storage.remove('activeWorkspaceId')
   }
 
   function setActiveWorkspaceId(id: string) {
     setActiveWorkspaceIdState(id)
-    localStorage.setItem('activeWorkspaceId', id)
+    storage.set('activeWorkspaceId', id)
   }
 
   return (

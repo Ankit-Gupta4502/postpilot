@@ -1,6 +1,7 @@
 import { createRootRoute, HeadContent, Outlet, Scripts} from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { OrgProvider } from '../lib/org-context'
+import { RouteGuard } from '../components/RouteGuard'
 import '../globals.css'
 
 export const Route = createRootRoute({
@@ -33,7 +34,9 @@ function RootComponent() {
   return (
     <RootDocument>
       <OrgProvider>
-        <Outlet />
+        <RouteGuard>
+          <Outlet />
+        </RouteGuard>
       </OrgProvider>
     </RootDocument>
   )

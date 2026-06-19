@@ -2,6 +2,7 @@ import { db, schema } from '@postpilot/db'
 import { eq } from 'drizzle-orm'
 import { getAdapter } from '@postpilot/adapters'
 import { decrypt } from '@postpilot/shared'
+import { isRateLimited, recordRateLimit } from '../lib/rate-limit'
 
 export async function publishHandler(msg: { body: unknown }) {
   const payload = msg.body as { syndicationJobId: string }
@@ -58,12 +59,36 @@ export async function publishHandler(msg: { body: unknown }) {
     (m) => `${process.env['R2_PUBLIC_BASE_URL'] ?? ''}/${m.r2Key}`
   )
 
+  // Advisory rate-limit check (§12) — skip call if KV says we're limited
+  if (await isRateLimited(account.id)) {
+    await db.update(schema.syndicationJobs).set({
+      status: 'queued',
+      processingStartedAt: null,
+      leaseExpiresAt: null,
+    }).where(eq(schema.syndicationJobs.id, syndicationJobId))
+    throw new Error(`Rate limited: account ${account.id}`)
+  }
+
   const adapter = getAdapter(job.platform)
-  const result = await adapter.publish(
-    { content: job.post?.content ?? '', mediaUrls },
-    job.idempotencyKey,
-    { accessToken, platformAccountId: account.platformAccountId }
-  )
+  let result: Awaited<ReturnType<typeof adapter.publish>>
+  try {
+    result = await adapter.publish(
+      { content: job.post?.content ?? '', mediaUrls },
+      job.idempotencyKey,
+      { accessToken, platformAccountId: account.platformAccountId }
+    )
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('429') || msg.toLowerCase().includes('rate limit')) {
+      await recordRateLimit(account.id)
+    }
+    await db.update(schema.syndicationJobs).set({
+      status: 'retrying',
+      leaseExpiresAt: null,
+      errorMessage: msg,
+    }).where(eq(schema.syndicationJobs.id, syndicationJobId))
+    throw err
+  }
 
   // §21 — persist published_post_id AND upsert platform_posts BEFORE acking
   await db.transaction(async (tx) => {

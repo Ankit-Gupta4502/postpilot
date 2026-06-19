@@ -3,6 +3,7 @@ import { publishHandler } from './handlers/publish'
 import { syncPostsHandler } from './handlers/sync-posts'
 import { analyticsHandler } from './handlers/analytics'
 import { webhookHandler } from './handlers/webhook'
+import { backfillHandler } from './handlers/backfill'
 
 const QUEUE_ENDPOINT = process.env['CF_QUEUES_PULL_ENDPOINT']!
 const VISIBILITY_TIMEOUT_MS = Number(process.env['QUEUE_VISIBILITY_TIMEOUT_MS'] ?? 900000)
@@ -22,6 +23,7 @@ const HANDLERS: Record<string, (msg: QueueMessage) => Promise<void>> = {
   [QUEUE_NAMES.SYNC_POSTS]: syncPostsHandler,
   [QUEUE_NAMES.ANALYTICS]: analyticsHandler,
   [QUEUE_NAMES.WEBHOOK]: webhookHandler,
+  [QUEUE_NAMES.BACKFILL]: backfillHandler,
 }
 
 async function pullMessages(queueId: string): Promise<QueueMessage[]> {

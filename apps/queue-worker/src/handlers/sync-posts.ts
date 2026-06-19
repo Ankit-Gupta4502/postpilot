@@ -2,6 +2,7 @@ import { db, schema } from '@postpilot/db'
 import { eq, and } from 'drizzle-orm'
 import { getAdapter } from '@postpilot/adapters'
 import { decrypt } from '@postpilot/shared'
+import { isRateLimited, recordRateLimit } from '../lib/rate-limit'
 
 export async function syncPostsHandler(msg: { body: unknown }) {
   const { socialAccountId } = msg.body as { socialAccountId: string }
@@ -20,6 +21,11 @@ export async function syncPostsHandler(msg: { body: unknown }) {
     ),
   })
 
+  if (await isRateLimited(account.id)) {
+    console.log(`Rate limited: skipping syncPosts for account ${account.id}`)
+    return
+  }
+
   const adapter = getAdapter(account.platform)
 
   let result
@@ -30,6 +36,9 @@ export async function syncPostsHandler(msg: { body: unknown }) {
     )
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    if (message.includes('429') || message.toLowerCase().includes('rate limit')) {
+      await recordRateLimit(account.id)
+    }
     await db.update(schema.socialAccounts).set({
       healthStatus: 'broken',
       lastErrorAt: new Date(),

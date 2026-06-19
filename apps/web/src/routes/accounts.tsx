@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '../lib/api'
 import { useOrg } from '../lib/org-context'
+import { queries } from '../lib/queries'
 import { Shell } from '../components/layout/Shell'
 import { AccountCard } from '../features/accounts/AccountCard'
 import { ConnectPlatformButton } from '../features/accounts/ConnectPlatformButton'
@@ -19,28 +19,12 @@ const API_BASE =
       : ''
     : 'http://localhost:8080'
 
-interface SocialAccount {
-  id: string
-  platform: string
-  username: string | null
-  displayName: string | null
-  avatarUrl: string | null
-  status: string
-  healthStatus: string
-  lastErrorMessage: string | null
-}
-
 function AccountsPage() {
   const { activeOrg, activeWorkspace } = useOrg()
 
-  const { data: accounts = [], isLoading } = useQuery({
-    queryKey: ['social-accounts', activeWorkspace?.id],
-    queryFn: () =>
-      apiFetch<SocialAccount[]>(`/api/social-accounts/${activeWorkspace!.id}`, {
-        orgId: activeOrg!.id,
-      }),
-    enabled: !!activeOrg && !!activeWorkspace,
-  })
+  const { data: accounts = [], isLoading } = useQuery(
+    queries.socialAccounts(activeWorkspace?.id ?? '', activeOrg?.id ?? '')
+  )
 
   const connectedPlatforms = new Set(
     accounts.filter((a) => a.status === 'connected').map((a) => a.platform)

@@ -1,15 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { apiFetch } from '../../lib/api.js'
-
-interface OrgInvite {
-  id: string
-  email: string
-  role: string
-  status: string
-  expiresAt: string
-  createdAt: string | null
-}
+import { queries, queryKeys } from '../../lib/queries.js'
 
 interface InvitesTabProps {
   orgId: string
@@ -19,16 +11,12 @@ interface InvitesTabProps {
 export function InvitesTab({ orgId, orgRole }: InvitesTabProps) {
   const queryClient = useQueryClient()
 
-  const { data: invites = [], isLoading } = useQuery<OrgInvite[]>({
-    queryKey: ['org-invites', orgId],
-    queryFn: () => apiFetch('/api/orgs/invites', { orgId }),
-    enabled: !!orgId,
-  })
+  const { data: invites = [], isLoading } = useQuery(queries.orgInvites(orgId))
 
   const revokeMutation = useMutation({
     mutationFn: (inviteId: string) =>
       apiFetch(`/api/invites/${inviteId}`, { method: 'DELETE', orgId }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['org-invites', orgId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.orgInvites(orgId) }),
   })
 
   const canManage = ['owner', 'admin'].includes(orgRole)

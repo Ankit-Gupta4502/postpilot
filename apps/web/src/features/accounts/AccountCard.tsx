@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button, Card, CardContent } from '@postpilot/ui'
 import { apiFetch } from '../../lib/api'
 import { useOrg } from '../../lib/org-context'
+import { queryKeys } from '../../lib/queries'
 import { PlatformIcon } from './PlatformIcon'
 import { HealthBadge } from './HealthBadge'
 
@@ -26,7 +27,7 @@ export function AccountCard({ account }: { account: Account }) {
         method: 'DELETE',
         orgId: activeOrg?.id,
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['social-accounts'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.socialAccounts() }),
   })
 
   const displayName = account.displayName ?? account.username ?? account.platform

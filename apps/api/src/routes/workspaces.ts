@@ -46,6 +46,40 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
     }
   )
 
+  // Rename workspace (workspace admin or org admin/owner)
+  fastify.patch<{ Params: { workspaceId: string }; Body: { name: string } }>(
+    '/:workspaceId',
+    { preHandler: [requireOrg] },
+    async (req, reply) => {
+      const { name } = req.body
+      if (!name?.trim()) return reply.status(400).send({ code: 'INVALID_NAME' })
+
+      const member = await db.query.workspaceMembers.findFirst({
+        where: and(
+          eq(schema.workspaceMembers.workspaceId, req.params.workspaceId),
+          eq(schema.workspaceMembers.userId, req.userId!),
+          eq(schema.workspaceMembers.orgId, req.orgId!)
+        ),
+        columns: { role: true },
+      })
+      const orgRole = req.orgRole
+      const canEdit =
+        orgRole === 'owner' || orgRole === 'admin' ||
+        member?.role === 'admin'
+      if (!canEdit) return reply.status(403).send({ code: 'FORBIDDEN' })
+
+      const [updated] = await db.update(schema.workspaces)
+        .set({ name: name.trim(), updatedAt: new Date() })
+        .where(and(
+          eq(schema.workspaces.id, req.params.workspaceId),
+          eq(schema.workspaces.orgId, req.orgId!)
+        ))
+        .returning()
+
+      return reply.send(updated)
+    }
+  )
+
   // Get workspace members
   fastify.get<{ Params: { workspaceId: string } }>(
     '/:workspaceId/members',

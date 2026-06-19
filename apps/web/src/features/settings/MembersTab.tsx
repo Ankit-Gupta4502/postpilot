@@ -4,14 +4,7 @@ import { Trash2 } from 'lucide-react'
 import { Badge, Input, Button } from '@postpilot/ui'
 import { apiFetch } from '../../lib/api.js'
 import { useSession } from '../../lib/auth-client.js'
-
-interface OrgMember {
-  id: string
-  userId: string
-  role: string
-  joinedAt: string | null
-  user: { id: string; name: string; email: string; image: string | null }
-}
+import { queries, queryKeys } from '../../lib/queries.js'
 
 interface MembersTabProps {
   orgId: string
@@ -33,16 +26,12 @@ export function MembersTab({ orgId, orgRole }: MembersTabProps) {
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [inviteSuccess, setInviteSuccess] = useState(false)
 
-  const { data: members = [], isLoading } = useQuery<OrgMember[]>({
-    queryKey: ['org-members', orgId],
-    queryFn: () => apiFetch('/api/orgs/members', { orgId }),
-    enabled: !!orgId,
-  })
+  const { data: members = [], isLoading } = useQuery(queries.orgMembers(orgId))
 
   const removeMutation = useMutation({
     mutationFn: (userId: string) =>
       apiFetch(`/api/orgs/members/${userId}`, { method: 'DELETE', orgId }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['org-members', orgId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.orgMembers(orgId) }),
   })
 
   const inviteMutation = useMutation({
@@ -57,7 +46,7 @@ export function MembersTab({ orgId, orgRole }: MembersTabProps) {
       setInviteError(null)
       setInviteSuccess(true)
       setTimeout(() => setInviteSuccess(false), 3000)
-      queryClient.invalidateQueries({ queryKey: ['org-invites', orgId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.orgInvites(orgId) })
     },
     onError: (err: Error) => setInviteError(err.message),
   })

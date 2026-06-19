@@ -12,13 +12,15 @@
   "dependencies": {
     "@postpilot/shared": "workspace:*",
     "@postpilot/ui": "workspace:*",
-    "lucide-react": "^0.469.0",
     "@tanstack/react-query": "^5.66.0",
     "@tanstack/react-router": "1.158.0",
     "@tanstack/react-start": "1.158.0",
     "better-auth": "^1.2.7",
+    "lucide-react": "^0.469.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "recharts": "3.8.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.0.0",

@@ -1,12 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '../../lib/api.js'
-
-interface Plan {
-  plan: string
-  price: number
-  currency: string
-  features: { teams: boolean; approvals: boolean; white_label: boolean }
-}
+import { queries } from '../../lib/queries.js'
 
 interface Org {
   id: string
@@ -38,10 +31,7 @@ function formatPrice(paise: number): string {
 }
 
 export function BillingTab({ org }: BillingTabProps) {
-  const { data: plans = [] } = useQuery<Plan[]>({
-    queryKey: ['billing-plans'],
-    queryFn: () => apiFetch('/api/billing/plans'),
-  })
+  const { data: plans = [] } = useQuery(queries.billingPlans())
 
   const currentPlan = plans.find((p) => p.plan === org.plan)
 
@@ -91,9 +81,6 @@ export function BillingTab({ org }: BillingTabProps) {
                 )}
                 {plan.features.approvals && (
                   <span className="rounded-full bg-muted px-2 py-0.5 text-xs">Approvals</span>
-                )}
-                {plan.features.white_label && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs">White-label</span>
                 )}
               </div>
             </div>

@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '../lib/api'
 import { useOrg } from '../lib/org-context'
+import { queries } from '../lib/queries'
 import { Shell } from '../components/layout/Shell'
 import { ComposerForm } from '../features/compose/ComposerForm'
 
@@ -9,25 +9,12 @@ export const Route = createFileRoute('/compose')({
   component: ComposePage,
 })
 
-interface SocialAccount {
-  id: string
-  platform: string
-  displayName: string | null
-  username: string | null
-  status: string
-}
-
 function ComposePage() {
   const { activeOrg, activeWorkspace } = useOrg()
 
-  const { data: accounts = [], isLoading } = useQuery({
-    queryKey: ['social-accounts', activeWorkspace?.id],
-    queryFn: () =>
-      apiFetch<SocialAccount[]>(`/api/social-accounts/${activeWorkspace!.id}`, {
-        orgId: activeOrg!.id,
-      }),
-    enabled: !!activeOrg && !!activeWorkspace,
-  })
+  const { data: accounts = [], isLoading } = useQuery(
+    queries.socialAccounts(activeWorkspace?.id ?? '', activeOrg?.id ?? '')
+  )
 
   return (
     <Shell>
@@ -42,11 +29,9 @@ function ComposePage() {
         {!activeWorkspace && (
           <p className="text-sm text-muted-foreground">Create a workspace first.</p>
         )}
-
         {activeWorkspace && isLoading && (
           <p className="text-sm text-muted-foreground">Loading…</p>
         )}
-
         {activeWorkspace && !isLoading && (
           <ComposerForm
             workspaceId={activeWorkspace.id}

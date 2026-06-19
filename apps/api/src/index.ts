@@ -13,6 +13,7 @@ import { billingRouter } from './routes/billing'
 import { webhooksRouter } from './routes/webhooks'
 import { invitesRouter } from './routes/invites'
 import { analyticsRouter } from './routes/analytics'
+import { adminRouter } from './routes/admin'
 
 const app = Fastify({
   logger: {
@@ -42,6 +43,7 @@ await app.register(billingRouter, { prefix: '/api/billing' })
 await app.register(webhooksRouter, { prefix: '/api/webhooks' })
 await app.register(invitesRouter, { prefix: '/api/invites' })
 await app.register(analyticsRouter, { prefix: '/api/analytics' })
+await app.register(adminRouter, { prefix: '/api/admin' })
 
 app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }))
 

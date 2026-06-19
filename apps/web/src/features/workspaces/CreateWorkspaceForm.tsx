@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Input, Button } from '@postpilot/ui'
 import { apiFetch } from '../../lib/api.js'
+import { queryKeys } from '../../lib/queries.js'
 
 interface CreateWorkspaceFormProps {
   orgId: string
@@ -20,7 +21,7 @@ export function CreateWorkspaceForm({ orgId, onCreated }: CreateWorkspaceFormPro
         body: JSON.stringify({ name }),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['workspaces', orgId] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces(orgId) })
       setName('')
       onCreated?.()
     },

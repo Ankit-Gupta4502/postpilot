@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, Link } from '@tanstack/react-router'
 import { Input } from '@postpilot/ui'
 import { authClient } from '../../lib/auth-client.js'
 
@@ -45,9 +45,17 @@ export function EmailSignInForm() {
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <label htmlFor="signin-password" className="text-sm font-medium text-foreground">
-          Password
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="signin-password" className="text-sm font-medium text-foreground">
+            Password
+          </label>
+          <Link
+            to="/forgot-password"
+            className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+          >
+            Forgot password?
+          </Link>
+        </div>
         <Input
           id="signin-password"
           type="password"

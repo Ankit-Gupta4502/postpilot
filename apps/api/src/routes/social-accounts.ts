@@ -4,6 +4,8 @@ import { eq, and } from 'drizzle-orm'
 import { requireOrg } from '../middleware/require-auth'
 import { getAdapter } from '@postpilot/adapters'
 import { decrypt } from '../lib/encryption'
+import { enqueueMessage } from '../lib/queue'
+import { QUEUE_NAMES } from '@postpilot/shared'
 
 export const socialAccountsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { workspaceId: string } }>('/:workspaceId', { preHandler: [requireOrg] }, async (req, reply) => {
@@ -55,6 +57,28 @@ export const socialAccountsRouter: FastifyPluginAsync = async (fastify) => {
       }).catch(() => {})
 
       return reply.send({ disconnected: true })
+    }
+  )
+
+  // Trigger a full post history backfill for an account
+  fastify.post<{ Params: { accountId: string } }>(
+    '/:accountId/backfill',
+    { preHandler: [requireOrg] },
+    async (req, reply) => {
+      const account = await db.query.socialAccounts.findFirst({
+        where: and(
+          eq(schema.socialAccounts.id, req.params.accountId),
+          eq(schema.socialAccounts.orgId, req.orgId!)
+        ),
+        columns: { id: true, status: true },
+      })
+      if (!account) return reply.status(404).send({ code: 'NOT_FOUND' })
+      if (account.status !== 'connected') {
+        return reply.status(422).send({ code: 'ACCOUNT_NOT_CONNECTED' })
+      }
+
+      await enqueueMessage(QUEUE_NAMES.BACKFILL, { socialAccountId: account.id })
+      return reply.status(202).send({ queued: true })
     }
   )
 

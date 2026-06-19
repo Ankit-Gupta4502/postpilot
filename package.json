@@ -5,15 +5,15 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
-    "dev:api": "turbo run dev --filter=@postpilot/api",
-    "dev:web": "turbo run dev --filter=@postpilot/web",
-    "dev:worker": "turbo run dev --filter=@postpilot/queue-worker",
+    "dev:api": "pnpm --filter=@postpilot/api run dev",
+    "dev:web": "pnpm --filter=@postpilot/web run dev",
+    "dev:worker": "pnpm --filter=@postpilot/queue-worker run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
-    "db:generate": "turbo run db:generate --filter=@postpilot/db",
-    "db:migrate": "turbo run db:migrate --filter=@postpilot/db",
-    "db:studio": "turbo run db:studio --filter=@postpilot/db",
+    "db:generate": "pnpm --filter=@postpilot/db run db:generate",
+    "db:migrate": "pnpm --filter=@postpilot/db run db:migrate",
+    "db:studio": "pnpm --filter=@postpilot/db run db:studio",
     "format": "prettier --write ."
   },
   "devDependencies": {

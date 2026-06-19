@@ -1,4 +1,4 @@
-import { LayoutDashboard, PenLine, Users, Briefcase, Settings, LogOut } from 'lucide-react'
+import { LayoutDashboard, PenLine, Users, Briefcase, Settings, LogOut, BarChart2, ShieldAlert } from 'lucide-react'
 import { signOut, useSession } from '../../lib/auth-client'
 import { OrgSwitcher } from './OrgSwitcher'
 import { NavLink } from './NavLink'
@@ -7,8 +7,10 @@ const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
   { to: '/compose', label: 'New Post', icon: <PenLine size={15} /> },
   { to: '/accounts', label: 'Social Accounts', icon: <Users size={15} /> },
+  { to: '/analytics', label: 'Analytics', icon: <BarChart2 size={15} /> },
   { to: '/workspaces', label: 'Workspaces', icon: <Briefcase size={15} /> },
   { to: '/settings', label: 'Settings', icon: <Settings size={15} /> },
+  { to: '/admin', label: 'Admin', icon: <ShieldAlert size={15} /> },
 ] satisfies { to: string; label: string; icon: React.ReactNode }[]
 
 export function Sidebar() {
