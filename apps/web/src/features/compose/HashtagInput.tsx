@@ -50,16 +50,18 @@ export function HashtagInput({ tags, onChange, platform }: Props) {
     <div className="space-y-2">
       <div
         className={cn(
-          'flex min-h-10 flex-wrap items-center gap-1.5 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-within:ring-1 focus-within:ring-ring',
-          overLimit && 'border-amber-400'
+          'flex min-h-12 flex-wrap items-center gap-1.5 rounded-2xl border border-border/70 bg-background/80 px-3.5 py-3 text-sm shadow-sm focus-within:border-primary/30 focus-within:ring-2 focus-within:ring-ring/20',
+          overLimit && 'border-amber-400/60 focus-within:border-amber-400/60'
         )}
         onClick={() => inputRef.current?.focus()}
       >
-        <Hash size={14} className="shrink-0 text-muted-foreground" />
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <Hash size={14} />
+        </span>
         {tags.map((tag) => (
           <span
             key={tag}
-            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+            className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary"
           >
             #{tag}
             <button

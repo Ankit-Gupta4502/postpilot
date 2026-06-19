@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, integer, bigint, boolean, index, unique } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, uuid, integer, bigint, boolean, index, unique, jsonb } from 'drizzle-orm/pg-core'
 import { users } from './auth'
 import { organizations } from './organizations'
 import { workspaces } from './workspaces'
@@ -42,6 +42,8 @@ export const syndicationJobs = pgTable('syndication_jobs', {
   postId: uuid('post_id').notNull().references(() => posts.id, { onDelete: 'cascade' }),
   socialAccountId: uuid('social_account_id').notNull().references(() => socialAccounts.id, { onDelete: 'cascade' }),
   platform: text('platform').notNull(),
+  content: text('content'),
+  metadata: jsonb('metadata'),
   status: text('status', { enum: ['queued', 'running', 'success', 'failed', 'retrying', 'cancelled'] }).notNull().default('queued'),
   attempts: integer('attempts').notNull().default(0),
   idempotencyKey: text('idempotency_key').unique().notNull(),

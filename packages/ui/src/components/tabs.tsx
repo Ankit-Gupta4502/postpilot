@@ -17,7 +17,7 @@ function Tabs({
       data-orientation={orientation}
       orientation={orientation}
       className={cn(
-        "group/tabs flex gap-2 data-[orientation=horizontal]:flex-col",
+        "group/tabs flex gap-3 data-[orientation=horizontal]:flex-col",
         className
       )}
       {...props}
@@ -26,12 +26,12 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  "group/tabs-list inline-flex w-fit items-center rounded-xl p-1 text-muted-foreground group-data-[orientation=horizontal]/tabs:h-11 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col",
+  "group/tabs-list inline-flex w-fit items-center rounded-2xl border border-border/70 bg-muted/60 p-1 text-muted-foreground shadow-sm shadow-black/5 backdrop-blur supports-[backdrop-filter]:bg-background/70 group-data-[orientation=horizontal]/tabs:h-12 group-data-[orientation=vertical]/tabs:h-fit group-data-[orientation=vertical]/tabs:flex-col",
   {
     variants: {
       variant: {
-        default: "gap-1 bg-muted",
-        line:    "gap-2 rounded-none border-b bg-transparent pb-0",
+        default: "gap-1",
+        line:    "gap-2 rounded-none border-b border-border/70 bg-transparent px-0 pb-0 shadow-none backdrop-blur-0",
       },
     },
     defaultVariants: { variant: "default" },
@@ -62,21 +62,13 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        // base
-        "relative inline-flex h-[calc(100%-4px)] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-transparent px-4 py-1.5 text-sm font-medium whitespace-nowrap transition-all",
-        // inactive text
+        "relative inline-flex h-[calc(100%-4px)] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-transparent px-4 py-2 text-sm font-medium whitespace-nowrap transition-all",
         "text-muted-foreground hover:text-foreground",
-        // focus
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
-        // disabled
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:pointer-events-none disabled:opacity-40",
-        // svg
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
-        // default variant active
-        "group-data-[variant=default]/tabs-list:data-[state=active]:bg-primary group-data-[variant=default]/tabs-list:data-[state=active]:text-primary-foreground group-data-[variant=default]/tabs-list:data-[state=active]:shadow-sm",
-        // line variant base — no bg, flush with bottom border
-        "group-data-[variant=line]/tabs-list:rounded-none group-data-[variant=line]/tabs-list:border-b-2 group-data-[variant=line]/tabs-list:border-transparent group-data-[variant=line]/tabs-list:pb-3 group-data-[variant=line]/tabs-list:h-auto",
-        // line variant active — bottom border in primary
+        "group-data-[variant=default]/tabs-list:data-[state=active]:border-border/70 group-data-[variant=default]/tabs-list:data-[state=active]:bg-background group-data-[variant=default]/tabs-list:data-[state=active]:text-foreground group-data-[variant=default]/tabs-list:data-[state=active]:shadow-sm",
+        "group-data-[variant=line]/tabs-list:rounded-none group-data-[variant=line]/tabs-list:border-b-2 group-data-[variant=line]/tabs-list:border-transparent group-data-[variant=line]/tabs-list:px-3 group-data-[variant=line]/tabs-list:py-2.5 group-data-[variant=line]/tabs-list:h-auto",
         "group-data-[variant=line]/tabs-list:data-[state=active]:border-primary group-data-[variant=line]/tabs-list:data-[state=active]:text-foreground",
         className
       )}

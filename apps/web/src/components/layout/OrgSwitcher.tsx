@@ -1,5 +1,5 @@
-import { ChevronDown } from 'lucide-react'
 import { useOrg } from '../../lib/org-context'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@postpilot/ui'
 
 export function OrgSwitcher() {
   const { orgs, activeOrg, setActiveOrgId } = useOrg()
@@ -7,22 +7,17 @@ export function OrgSwitcher() {
   if (orgs.length === 0) return null
 
   return (
-    <div className="relative">
-      <select
-        value={activeOrg?.id ?? ''}
-        onChange={(e) => setActiveOrgId(e.target.value)}
-        className="w-full appearance-none rounded-md border border-border bg-background px-3 py-1.5 pr-8 text-xs font-medium text-foreground shadow-xs transition-colors focus:outline-none focus:ring-1 focus:ring-ring"
-      >
+    <Select value={activeOrg?.id ?? ''} onValueChange={setActiveOrgId}>
+      <SelectTrigger className="h-9 rounded-xl border-border/70 bg-background/90 px-3 text-sm shadow-sm shadow-black/5">
+        <SelectValue placeholder="Select organization" />
+      </SelectTrigger>
+      <SelectContent>
         {orgs.map((org) => (
-          <option key={org.id} value={org.id}>
+          <SelectItem key={org.id} value={org.id}>
             {org.name}
-          </option>
+          </SelectItem>
         ))}
-      </select>
-      <ChevronDown
-        size={12}
-        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-      />
-    </div>
+      </SelectContent>
+    </Select>
   )
 }

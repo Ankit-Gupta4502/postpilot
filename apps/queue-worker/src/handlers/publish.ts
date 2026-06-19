@@ -73,7 +73,7 @@ export async function publishHandler(msg: { body: unknown }) {
   let result: Awaited<ReturnType<typeof adapter.publish>>
   try {
     result = await adapter.publish(
-      { content: job.post?.content ?? '', mediaUrls },
+      { content: job.content ?? job.post?.content ?? '', mediaUrls },
       job.idempotencyKey,
       { accessToken, platformAccountId: account.platformAccountId }
     )
@@ -102,7 +102,7 @@ export async function publishHandler(msg: { body: unknown }) {
     await tx.insert(schema.platformPosts).values({
       socialAccountId: job.socialAccountId,
       platformPostId: result.platformPostId,
-      content: job.post?.content,
+      content: job.content ?? job.post?.content,
       publishedAt: new Date(),
       isOurs: true,
     }).onConflictDoNothing()

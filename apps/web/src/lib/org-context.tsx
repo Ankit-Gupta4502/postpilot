@@ -47,6 +47,7 @@ export interface Workspace {
   id: string
   name: string
   orgId: string
+  role: string
 }
 
 interface OrgContextValue {

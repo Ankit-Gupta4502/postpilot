@@ -1,29 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@tanstack/react-query'
-import { Button } from '@postpilot/ui'
+import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from '@postpilot/ui'
 import { apiFetch } from '../../lib/api'
-import { localToUTC, getDefaultTimezone } from '../../lib/timezone'
 import { PlatformSelector } from '../accounts/PlatformSelector'
+import { Sparkles } from 'lucide-react'
 import { MediaUploader, type UploadedMedia } from './MediaUploader'
-import { ScheduleField } from './ScheduleField'
-import { HashtagInput } from './HashtagInput'
-
-const PLATFORM_LIMITS: Record<string, number> = {
-  x: 280,
-  instagram: 2200,
-  facebook: 63206,
-  linkedin: 3000,
-  youtube: 5000,
-}
-
-const PLATFORM_LABEL: Record<string, string> = {
-  x: 'X',
-  instagram: 'Instagram',
-  facebook: 'Facebook',
-  linkedin: 'LinkedIn',
-  youtube: 'YouTube',
-}
 
 interface Account {
   id: string
@@ -43,32 +25,8 @@ interface ComposerFormProps {
 export function ComposerForm({ workspaceId, orgId, accounts }: ComposerFormProps) {
   const navigate = useNavigate()
   const [content, setContent] = useState('')
-  const [hashtags, setHashtags] = useState<string[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [uploads, setUploads] = useState<UploadedMedia[]>([])
-  const [scheduleEnabled, setScheduleEnabled] = useState(false)
-  const [scheduledAt, setScheduledAt] = useState('')
-  const [timezone, setTimezone] = useState(getDefaultTimezone)
-
-  const selectedAccounts = accounts.filter((a) => selectedIds.includes(a.id))
-  const selectedPlatforms = [...new Set(selectedAccounts.map((a) => a.platform))]
-
-  // Build the final content string (content + hashtags appended)
-  const hashtagSuffix = hashtags.length > 0 ? '\n\n' + hashtags.map((t) => `#${t}`).join(' ') : ''
-  const fullContent = content + hashtagSuffix
-
-  // Per-platform char counts
-  const platformCounts = selectedPlatforms.map((p) => ({
-    platform: p,
-    limit: PLATFORM_LIMITS[p] ?? 63206,
-    count: fullContent.length,
-    over: fullContent.length > (PLATFORM_LIMITS[p] ?? 63206),
-  }))
-
-  const anyOverLimit = platformCounts.some((p) => p.over)
-
-  // Show hashtag section only when a single platform is selected (for the tag limit hint)
-  const singlePlatform = selectedPlatforms.length === 1 ? selectedPlatforms[0] : undefined
 
   const mutation = useMutation({
     mutationFn: () =>
@@ -77,12 +35,9 @@ export function ComposerForm({ workspaceId, orgId, accounts }: ComposerFormProps
         orgId,
         data: {
           workspaceId,
-          content: fullContent,
+          content: content.trim(),
           accountIds: selectedIds,
-          scheduledFor:
-            scheduleEnabled && scheduledAt ? localToUTC(scheduledAt, timezone) : undefined,
-          timezone: scheduleEnabled ? timezone : undefined,
-          mediaIds: uploads.map((u) => u.mediaId),
+          mediaIds: uploads.map((media) => media.mediaId),
         },
       }),
     onSuccess: () => navigate({ to: '/dashboard' }),
@@ -91,98 +46,84 @@ export function ComposerForm({ workspaceId, orgId, accounts }: ComposerFormProps
   const canSubmit =
     content.trim().length > 0 &&
     selectedIds.length > 0 &&
-    !anyOverLimit &&
-    !mutation.isPending &&
-    (!scheduleEnabled || scheduledAt.length > 0)
+    !mutation.isPending
 
   return (
     <form
-      onSubmit={(e) => { e.preventDefault(); if (canSubmit) mutation.mutate() }}
-      className="space-y-6"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (canSubmit) mutation.mutate()
+      }}
+      className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]"
     >
-      {/* Account selector */}
-      <div>
-        <label className="mb-2 block text-sm font-medium">Post to</label>
-        <PlatformSelector accounts={accounts} selectedIds={selectedIds} onChange={setSelectedIds} />
-      </div>
+      <Card className="overflow-hidden border-border/70 bg-card/90 shadow-sm xl:order-1">
+        <CardHeader className="border-b border-border/60 bg-gradient-to-r from-sky-500/5 to-transparent py-3">
+          <CardTitle className="text-base">Accounts</CardTitle>
+          <CardDescription className="text-xs">Pick connected accounts.</CardDescription>
+        </CardHeader>
+        <CardContent className="p-3.5 sm:p-4">
+          <PlatformSelector accounts={accounts} selectedIds={selectedIds} onChange={setSelectedIds} />
+        </CardContent>
+      </Card>
 
-      {/* Content textarea */}
-      <div>
-        <label className="mb-2 block text-sm font-medium">Caption</label>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="What do you want to share?"
-          rows={5}
-          className="flex w-full resize-none rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        />
+      <div className="space-y-4 xl:order-2">
+        <Card className="overflow-hidden border-border/70 bg-card/90 shadow-sm">
+          <CardHeader className="border-b border-border/60 bg-gradient-to-r from-primary/5 to-transparent py-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Sparkles size={16} className="text-primary" />
+              Content
+            </CardTitle>
+            <CardDescription className="text-xs">Write the post text.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-3.5 sm:p-4">
+            <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Post text</label>
+            <textarea
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Write your post..."
+              rows={6}
+              className="flex w-full resize-none rounded-xl border border-border/70 bg-background/80 px-3.5 py-3 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            />
+            <p className="mt-1.5 text-[11px] text-muted-foreground">
+              {content.trim().length === 0 ? 'Start typing to enable publish.' : `${content.trim().length} characters`}
+            </p>
+          </CardContent>
+        </Card>
 
-        {/* Per-platform char count breakdown */}
-        {platformCounts.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-            {platformCounts.map(({ platform, limit, count, over }) => (
-              <span
-                key={platform}
-                className={`text-xs ${over ? 'font-semibold text-destructive' : 'text-muted-foreground'}`}
-              >
-                {PLATFORM_LABEL[platform] ?? platform}: {count}/{limit}
-              </span>
-            ))}
-          </div>
+        <Card className="overflow-hidden border-border/70 bg-card/90 shadow-sm">
+          <CardHeader className="border-b border-border/60 bg-gradient-to-r from-sky-500/5 to-transparent py-3">
+            <CardTitle className="text-base">Media</CardTitle>
+            <CardDescription className="text-xs">Upload images or videos.</CardDescription>
+          </CardHeader>
+          <CardContent className="p-3.5 sm:p-4">
+            <MediaUploader
+              orgId={orgId}
+              uploads={uploads}
+              onUpload={(media) => setUploads((prev) => [...prev, media])}
+              onRemove={(mediaId) => setUploads((prev) => prev.filter((item) => item.mediaId !== mediaId))}
+            />
+          </CardContent>
+        </Card>
+
+        {mutation.isError && (
+          <p className="rounded-2xl border border-red-200/70 bg-red-50/70 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/25 dark:text-red-300">
+            {(mutation.error as Error)?.message ?? 'Something went wrong'}
+          </p>
         )}
-      </div>
 
-      {/* Hashtags */}
-      <div>
-        <label className="mb-2 block text-sm font-medium">Hashtags</label>
-        <HashtagInput
-          tags={hashtags}
-          onChange={setHashtags}
-          platform={singlePlatform}
-        />
-      </div>
-
-      {/* Media */}
-      <div>
-        <label className="mb-2 block text-sm font-medium">Media</label>
-        <MediaUploader
-          orgId={orgId}
-          uploads={uploads}
-          onUpload={(m) => setUploads((prev) => [...prev, m])}
-          onRemove={(id) => setUploads((prev) => prev.filter((u) => u.mediaId !== id))}
-        />
-      </div>
-
-      {/* Schedule */}
-      <ScheduleField
-        enabled={scheduleEnabled}
-        onToggle={() => setScheduleEnabled((v) => !v)}
-        scheduledAt={scheduledAt}
-        timezone={timezone}
-        onScheduledAtChange={setScheduledAt}
-        onTimezoneChange={setTimezone}
-      />
-
-      {mutation.isError && (
-        <p className="text-sm text-destructive">
-          {(mutation.error as Error)?.message ?? 'Something went wrong'}
-        </p>
-      )}
-
-      <div className="flex gap-3">
-        <Button type="submit" disabled={!canSubmit}>
-          {mutation.isPending
-            ? scheduleEnabled ? 'Scheduling…' : 'Publishing…'
-            : scheduleEnabled ? 'Schedule' : 'Publish now'}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => navigate({ to: '/dashboard' })}
-          disabled={mutation.isPending}
-        >
-          Cancel
-        </Button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Button type="submit" disabled={!canSubmit} className="sm:w-auto">
+            {mutation.isPending ? 'Publishing…' : 'Publish now'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate({ to: '/dashboard' })}
+            disabled={mutation.isPending}
+          >
+            Cancel
+          </Button>
+        </div>
       </div>
     </form>
   )

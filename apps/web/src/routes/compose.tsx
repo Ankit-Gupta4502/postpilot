@@ -18,19 +18,16 @@ function ComposePage() {
 
   return (
     <Shell>
-      <div className="max-w-2xl">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight">New Post</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {activeWorkspace ? activeWorkspace.name : 'No workspace selected'}
-          </p>
-        </div>
-
+      <div className="mx-auto max-w-3xl">
         {!activeWorkspace && (
-          <p className="text-sm text-muted-foreground">Create a workspace first.</p>
+          <p className="rounded-2xl border border-dashed border-border/70 bg-background/80 px-4 py-3 text-sm text-muted-foreground">
+            Create or select a workspace first.
+          </p>
         )}
         {activeWorkspace && isLoading && (
-          <p className="text-sm text-muted-foreground">Loading…</p>
+          <p className="rounded-2xl border border-border/70 bg-background/80 px-4 py-3 text-sm text-muted-foreground">
+            Loading accounts…
+          </p>
         )}
         {activeWorkspace && !isLoading && (
           <ComposerForm
