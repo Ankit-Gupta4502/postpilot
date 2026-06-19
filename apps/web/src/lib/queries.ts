@@ -85,7 +85,13 @@ export interface BillingPlan {
   plan: string
   price: number
   currency: string
-  features: { teams: boolean; approvals: boolean }
+  features: { teams: boolean; approvals: boolean; white_label: boolean }
+}
+
+export interface SubscribeResult {
+  subscriptionId: string
+  shortUrl: string
+  plan: string
 }
 
 export interface DeadLetterJob {

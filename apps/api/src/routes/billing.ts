@@ -4,11 +4,19 @@ import Razorpay from 'razorpay'
 import { db, schema } from '@postpilot/db'
 import { eq, and } from 'drizzle-orm'
 import { requireOrg } from '../middleware/require-auth'
+import { ok, created, fail } from '../lib/response'
 
-const rp = new Razorpay({
-  key_id: process.env['RAZORPAY_KEY_ID'] ?? '',
-  key_secret: process.env['RAZORPAY_KEY_SECRET'] ?? '',
-})
+let _rp: Razorpay | null = null
+
+function rp(): Razorpay {
+  if (!_rp) {
+    _rp = new Razorpay({
+      key_id: process.env['RAZORPAY_KEY_ID'] ?? '',
+      key_secret: process.env['RAZORPAY_KEY_SECRET'] ?? '',
+    })
+  }
+  return _rp
+}
 
 /** Maps our plan names to the Razorpay plan IDs from env. */
 function razorpayPlanId(plan: string): string {
@@ -21,12 +29,15 @@ function razorpayPlanId(plan: string): string {
 export const billingRouter: FastifyPluginAsync = async (fastify) => {
   // ── Static plan info ────────────────────────────────────────────────────────
   fastify.get('/plans', async (_req, reply) => {
-    return reply.send([
-      { plan: 'free', price: 0, currency: 'INR', features: { teams: false, approvals: false, white_label: false } },
-      { plan: 'starter', price: 99900, currency: 'INR', features: { teams: false, approvals: false, white_label: false } },
-      { plan: 'pro', price: 299900, currency: 'INR', features: { teams: true, approvals: false, white_label: false } },
-      { plan: 'agency', price: 799900, currency: 'INR', features: { teams: true, approvals: true, white_label: true } },
-    ])
+    return ok(reply, {
+      data: [
+        { plan: 'free', price: 0, currency: 'INR', features: { teams: false, approvals: false, white_label: false } },
+        { plan: 'starter', price: 99900, currency: 'INR', features: { teams: false, approvals: false, white_label: false } },
+        { plan: 'pro', price: 299900, currency: 'INR', features: { teams: true, approvals: false, white_label: false } },
+        { plan: 'agency', price: 799900, currency: 'INR', features: { teams: true, approvals: true, white_label: true } },
+      ],
+      message: 'Plans retrieved',
+    })
   })
 
   // ── Create subscription ─────────────────────────────────────────────────────
@@ -43,7 +54,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       const orgId = req.orgId!
 
       if (!['owner', 'admin', 'billing'].includes(req.orgRole ?? '')) {
-        return reply.status(403).send({ code: 'FORBIDDEN', message: 'Billing access required' })
+        return fail(reply, { status: 403, code: 'FORBIDDEN', message: 'Billing access required' })
       }
 
       // Ensure billing customer exists
@@ -52,9 +63,9 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       })
       if (!customer) {
         const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, orgId) })
-        if (!org) return reply.status(404).send({ code: 'NOT_FOUND' })
+        if (!org) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Organization not found' })
 
-        const rpCustomer = await rp.customers.create({ name: org.name })
+        const rpCustomer = await rp().customers.create({ name: org.name })
         const [newCustomer] = await db.insert(schema.billingCustomers).values({
           orgId,
           razorpayCustomerId: rpCustomer.id,
@@ -63,13 +74,14 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       }
 
       // Create Razorpay subscription
-      const rpSub = await rp.subscriptions.create({
+      const rpSub = await rp().subscriptions.create({
         plan_id: razorpayPlanId(plan),
         customer_notify: 1,
         quantity: 1,
         total_count: 12, // 12 billing cycles; set to 0 for indefinite
         notes: { org_id: orgId, plan },
-      } as Parameters<typeof rp.subscriptions.create>[0])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any) as { id: string; short_url?: string }
 
       // Persist locally
       const [sub] = await db.insert(schema.subscriptions).values({
@@ -78,7 +90,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
         razorpayPlanId: razorpayPlanId(plan),
         plan,
         status: 'created',
-        shortUrl: (rpSub as unknown as Record<string, unknown>)['short_url'] as string | undefined,
+        shortUrl: rpSub.short_url,
       }).returning()
 
       await db.insert(schema.auditLog).values({
@@ -90,10 +102,9 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
         metadata: JSON.stringify({ plan, razorpaySubscriptionId: rpSub.id }),
       }).catch(() => {})
 
-      return reply.status(201).send({
-        subscriptionId: rpSub.id,
-        shortUrl: (rpSub as unknown as Record<string, unknown>)['short_url'],
-        plan,
+      return created(reply, {
+        data: { subscriptionId: rpSub.id, shortUrl: rpSub.short_url, plan },
+        message: 'Subscription created',
       })
     }
   )
@@ -104,7 +115,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     { preHandler: [requireOrg] },
     async (req, reply) => {
       if (!['owner', 'admin', 'billing'].includes(req.orgRole ?? '')) {
-        return reply.status(403).send({ code: 'FORBIDDEN', message: 'Billing access required' })
+        return fail(reply, { status: 403, code: 'FORBIDDEN', message: 'Billing access required' })
       }
 
       const { plan, amount } = req.body
@@ -112,7 +123,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
       const orgId = req.orgId!
       const receipt = `pp_${orgId}_${Date.now()}`
 
-      const rpOrder = await rp.orders.create({
+      const rpOrder = await rp().orders.create({
         amount,
         currency,
         receipt,
@@ -132,7 +143,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
         createdBy: req.userId!,
       })
 
-      return reply.status(201).send({ orderId: rpOrder.id, amount, currency, receipt })
+      return created(reply, { data: { orderId: rpOrder.id, amount, currency, receipt }, message: 'Order created' })
     }
   )
 
@@ -142,7 +153,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
     { preHandler: [requireOrg] },
     async (req, reply) => {
       if (!['owner', 'admin', 'billing'].includes(req.orgRole ?? '')) {
-        return reply.status(403).send({ code: 'FORBIDDEN' })
+        return fail(reply, { status: 403, code: 'FORBIDDEN', message: 'Billing access required' })
       }
 
       const sub = await db.query.subscriptions.findFirst({
@@ -151,10 +162,10 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
           eq(schema.subscriptions.orgId, req.orgId!)
         ),
       })
-      if (!sub) return reply.status(404).send({ code: 'NOT_FOUND' })
+      if (!sub) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Subscription not found' })
 
       const cancelNow = !(req.body.cancelAtPeriodEnd ?? true)
-      await rp.subscriptions.cancel(sub.razorpaySubscriptionId, cancelNow)
+      await rp().subscriptions.cancel(sub.razorpaySubscriptionId, cancelNow)
 
       await db.update(schema.subscriptions)
         .set({ cancelAtPeriodEnd: !cancelNow, updatedAt: new Date() })
@@ -173,7 +184,7 @@ export const billingRouter: FastifyPluginAsync = async (fastify) => {
         metadata: JSON.stringify({ cancelNow }),
       }).catch(() => {})
 
-      return reply.send({ cancelled: true })
+      return ok(reply, { data: { cancelled: true }, message: 'Subscription cancelled' })
     }
   )
 

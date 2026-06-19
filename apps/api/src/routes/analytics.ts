@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify'
 import { db, schema } from '@postpilot/db'
 import { eq, and, inArray, gte, lte, desc } from 'drizzle-orm'
 import { requireOrg } from '../middleware/require-auth'
+import { ok, fail } from '../lib/response'
 
 export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{
@@ -17,8 +18,8 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
       const account = await db.query.socialAccounts.findFirst({
         where: eq(schema.socialAccounts.id, socialAccountId),
       })
-      if (!account) return reply.status(404).send({ code: 'NOT_FOUND' })
-      if (account.orgId !== req.orgId) return reply.status(403).send({ code: 'FORBIDDEN' })
+      if (!account) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Account not found' })
+      if (account.orgId !== req.orgId) return fail(reply, { status: 403, code: 'FORBIDDEN', message: 'Access denied' })
 
       const platformPostRows = await db.query.platformPosts.findMany({
         where: eq(schema.platformPosts.socialAccountId, socialAccountId),
@@ -27,7 +28,7 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
       const platformPostIds = platformPostRows.map((p) => p.id)
 
       if (platformPostIds.length === 0) {
-        return reply.send({ snapshots: [] })
+        return ok(reply, { data: { snapshots: [] }, message: 'Snapshots retrieved' })
       }
 
       const conditions = [inArray(schema.postMetricSnapshots.platformPostId, platformPostIds)]
@@ -50,7 +51,7 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
         },
       })
 
-      return reply.send({ snapshots })
+      return ok(reply, { data: { snapshots }, message: 'Snapshots retrieved' })
     }
   )
 
@@ -63,8 +64,8 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
       const account = await db.query.socialAccounts.findFirst({
         where: eq(schema.socialAccounts.id, socialAccountId),
       })
-      if (!account) return reply.status(404).send({ code: 'NOT_FOUND' })
-      if (account.orgId !== req.orgId) return reply.status(403).send({ code: 'FORBIDDEN' })
+      if (!account) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Account not found' })
+      if (account.orgId !== req.orgId) return fail(reply, { status: 403, code: 'FORBIDDEN', message: 'Access denied' })
 
       const posts = await db.query.platformPosts.findMany({
         where: eq(schema.platformPosts.socialAccountId, socialAccountId),
@@ -72,7 +73,7 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
         limit: 50,
       })
 
-      return reply.send({ posts })
+      return ok(reply, { data: { posts }, message: 'Posts retrieved' })
     }
   )
 
@@ -85,8 +86,8 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
       const account = await db.query.socialAccounts.findFirst({
         where: eq(schema.socialAccounts.id, socialAccountId),
       })
-      if (!account) return reply.status(404).send({ code: 'NOT_FOUND' })
-      if (account.orgId !== req.orgId) return reply.status(403).send({ code: 'FORBIDDEN' })
+      if (!account) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Account not found' })
+      if (account.orgId !== req.orgId) return fail(reply, { status: 403, code: 'FORBIDDEN', message: 'Access denied' })
 
       const platformPostRows = await db.query.platformPosts.findMany({
         where: eq(schema.platformPosts.socialAccountId, socialAccountId),
@@ -112,14 +113,17 @@ export const analyticsRouter: FastifyPluginAsync = async (fastify) => {
         })
       }
 
-      return reply.send({
-        accountId: account.id,
-        platform: account.platform,
-        username: account.username,
-        analyticsSyncPriority: account.analyticsSyncPriority,
-        lastAnalyticsSyncAt: account.lastAnalyticsSyncAt,
-        totalPosts: platformPostIds.length,
-        latestSnapshot,
+      return ok(reply, {
+        data: {
+          accountId: account.id,
+          platform: account.platform,
+          username: account.username,
+          analyticsSyncPriority: account.analyticsSyncPriority,
+          lastAnalyticsSyncAt: account.lastAnalyticsSyncAt,
+          totalPosts: platformPostIds.length,
+          latestSnapshot,
+        },
+        message: 'Summary retrieved',
       })
     }
   )

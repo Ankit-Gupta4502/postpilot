@@ -6,8 +6,17 @@ import { requireOrg, requireAuth } from '../middleware/require-auth'
 import { checkMemberLimit } from '../middleware/plan-gate'
 import { generateSecureToken, hashToken } from '@postpilot/shared'
 import { INVITE_EXPIRY_DAYS } from '@postpilot/shared'
+import { ok, created, noContent, fail } from '../lib/response'
 
-const resend = new Resend(process.env['RESEND_API_KEY'])
+let _resend: Resend | null = null
+
+function getResend(): Resend | null {
+  const key = process.env['RESEND_API_KEY']
+  if (!key) return null
+  if (!_resend) _resend = new Resend(key)
+  return _resend
+}
+
 const FROM = process.env['EMAIL_FROM'] ?? 'no-reply@postpilot.app'
 const APP_BASE_URL = () => process.env['APP_BASE_URL'] ?? 'http://localhost:3000'
 
@@ -17,17 +26,8 @@ interface WorkspaceGrant {
 }
 
 export const invitesRouter: FastifyPluginAsync = async (fastify) => {
-  /**
-   * POST /api/invites
-   * Send an invite for a new or existing user to join an org.
-   * Auth: org admin or owner.
-   */
   fastify.post<{
-    Body: {
-      email: string
-      role: 'admin' | 'billing' | 'member'
-      workspaceGrants?: WorkspaceGrant[]
-    }
+    Body: { email: string; role: 'admin' | 'billing' | 'member'; workspaceGrants?: WorkspaceGrant[] }
   }>(
     '/',
     { preHandler: [requireOrg, checkMemberLimit] },
@@ -36,15 +36,12 @@ export const invitesRouter: FastifyPluginAsync = async (fastify) => {
       const orgId = req.orgId!
 
       if (!['owner', 'admin'].includes(req.orgRole ?? '')) {
-        return reply.status(403).send({ code: 'FORBIDDEN', message: 'Only org admins can invite members' })
+        return fail(reply, { status: 403, code: 'FORBIDDEN', message: 'Only org admins can invite members' })
       }
 
-      const org = await db.query.organizations.findFirst({
-        where: eq(schema.organizations.id, orgId),
-      })
-      if (!org) return reply.status(404).send({ code: 'NOT_FOUND' })
+      const org = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, orgId) })
+      if (!org) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Organization not found' })
 
-      // Only one pending invite per email per org
       const existing = await db.query.orgInvites.findFirst({
         where: and(
           eq(schema.orgInvites.orgId, orgId),
@@ -53,10 +50,9 @@ export const invitesRouter: FastifyPluginAsync = async (fastify) => {
         ),
       })
       if (existing) {
-        return reply.status(409).send({ code: 'DUPLICATE', message: 'An active invite already exists for this email' })
+        return fail(reply, { status: 409, code: 'DUPLICATE', message: 'An active invite already exists for this email' })
       }
 
-      // Generate a secure token; store only the hash
       const rawToken = await generateSecureToken()
       const tokenHash = await hashToken(rawToken)
       const expiresAt = new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000)
@@ -71,36 +67,38 @@ export const invitesRouter: FastifyPluginAsync = async (fastify) => {
         expiresAt,
       }).returning()
 
-      if (!invite) return reply.status(500).send({ code: 'INTERNAL' })
+      if (!invite) return fail(reply, { status: 500, code: 'INTERNAL', message: 'Failed to create invite' })
 
       const acceptUrl = `${APP_BASE_URL()}/invite/accept?token=${rawToken}`
 
-      // Send invite email via Resend
-      const { data: emailData, error: emailError } = await resend.emails.send({
-        from: FROM,
-        to: email,
-        subject: `You've been invited to join ${org.name} on PostPilot`,
-        html: buildInviteEmailHtml({
-          orgName: org.name,
-          role,
-          acceptUrl,
-          expiryDays: INVITE_EXPIRY_DAYS,
-        }),
-      })
+      const client = getResend()
+      let emailData: { id?: string } | null = null
+      let emailError: unknown = null
 
-      // Record email event for delivery tracking (§29)
+      if (!client) {
+        fastify.log.warn('RESEND_API_KEY is not configured — invite email not sent')
+      } else {
+        const result = await client.emails.send({
+          from: FROM,
+          to: email,
+          subject: `You've been invited to join ${org.name} on PostPilot`,
+          html: buildInviteEmailHtml({ orgName: org.name, role, acceptUrl, expiryDays: INVITE_EXPIRY_DAYS }),
+        })
+        emailData = result.data
+        emailError = result.error
+      }
+
       await db.insert(schema.emailEvents).values({
         orgId,
         recipient: email.toLowerCase(),
         template: 'org_invite',
-        status: emailError ? 'failed' : 'sent',
+        status: !client ? 'failed' : emailError ? 'failed' : 'sent',
         providerMessageId: emailData?.id ?? null,
       }).catch(() => {})
 
       if (emailError) {
         fastify.log.error({ emailError }, 'Failed to send invite email')
-        // Invite row is already created; surface the email failure but don't block
-        return reply.status(201).send({ invite, emailSent: false })
+        return created(reply, { data: { invite, emailSent: false }, message: 'Invite created (email delivery failed)' })
       }
 
       await db.insert(schema.auditLog).values({
@@ -112,14 +110,10 @@ export const invitesRouter: FastifyPluginAsync = async (fastify) => {
         metadata: JSON.stringify({ email, role }),
       }).catch(() => {})
 
-      return reply.status(201).send({ invite, emailSent: true })
+      return created(reply, { data: { invite, emailSent: true }, message: 'Invite sent' })
     }
   )
 
-  /**
-   * POST /api/invites/accept
-   * Accept a pending invite. The caller must be authenticated (logged in or just signed up).
-   */
   fastify.post<{ Body: { token: string } }>(
     '/accept',
     { preHandler: [requireAuth] },
@@ -134,17 +128,14 @@ export const invitesRouter: FastifyPluginAsync = async (fastify) => {
         ),
       })
 
-      if (!invite) {
-        return reply.status(404).send({ code: 'NOT_FOUND', message: 'Invite not found or already used' })
-      }
+      if (!invite) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Invite not found or already used' })
       if (invite.expiresAt < new Date()) {
         await db.update(schema.orgInvites).set({ status: 'expired' }).where(eq(schema.orgInvites.id, invite.id))
-        return reply.status(410).send({ code: 'INVITE_EXPIRED', message: 'This invite has expired' })
+        return fail(reply, { status: 410, code: 'INVITE_EXPIRED', message: 'This invite has expired' })
       }
 
       const userId = req.userId!
 
-      // Idempotent: if already a member, just accept the invite row and return
       const existingMember = await db.query.orgMembers.findFirst({
         where: and(
           eq(schema.orgMembers.orgId, invite.orgId),
@@ -163,22 +154,14 @@ export const invitesRouter: FastifyPluginAsync = async (fastify) => {
           })
         }
 
-        // Apply workspace grants if present
         const grants = (invite.workspaceGrants ?? []) as WorkspaceGrant[]
         for (const grant of grants) {
-          await tx
-            .insert(schema.workspaceMembers)
-            .values({
-              workspaceId: grant.workspaceId,
-              orgId: invite.orgId,
-              userId,
-              role: grant.role,
-            })
+          await tx.insert(schema.workspaceMembers)
+            .values({ workspaceId: grant.workspaceId, orgId: invite.orgId, userId, role: grant.role })
             .onConflictDoNothing()
         }
 
-        await tx
-          .update(schema.orgInvites)
+        await tx.update(schema.orgInvites)
           .set({ status: 'accepted', acceptedBy: userId })
           .where(eq(schema.orgInvites.id, invite.id))
       })
@@ -192,20 +175,16 @@ export const invitesRouter: FastifyPluginAsync = async (fastify) => {
         metadata: JSON.stringify({ email: invite.email }),
       }).catch(() => {})
 
-      return reply.send({ orgId: invite.orgId, role: invite.role })
+      return ok(reply, { data: { orgId: invite.orgId, role: invite.role }, message: 'Invite accepted' })
     }
   )
 
-  /**
-   * DELETE /api/invites/:inviteId
-   * Revoke a pending invite.
-   */
   fastify.delete<{ Params: { inviteId: string } }>(
     '/:inviteId',
     { preHandler: [requireOrg] },
     async (req, reply) => {
       if (!['owner', 'admin'].includes(req.orgRole ?? '')) {
-        return reply.status(403).send({ code: 'FORBIDDEN' })
+        return fail(reply, { status: 403, code: 'FORBIDDEN', message: 'Admin or owner required' })
       }
 
       const invite = await db.query.orgInvites.findFirst({
@@ -215,23 +194,16 @@ export const invitesRouter: FastifyPluginAsync = async (fastify) => {
           eq(schema.orgInvites.status, 'pending')
         ),
       })
-      if (!invite) return reply.status(404).send({ code: 'NOT_FOUND' })
+      if (!invite) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Invite not found' })
 
-      await db.update(schema.orgInvites)
-        .set({ status: 'revoked' })
-        .where(eq(schema.orgInvites.id, invite.id))
+      await db.update(schema.orgInvites).set({ status: 'revoked' }).where(eq(schema.orgInvites.id, invite.id))
 
-      return reply.status(204).send()
+      return noContent(reply)
     }
   )
 }
 
-function buildInviteEmailHtml(opts: {
-  orgName: string
-  role: string
-  acceptUrl: string
-  expiryDays: number
-}): string {
+function buildInviteEmailHtml(opts: { orgName: string; role: string; acceptUrl: string; expiryDays: number }): string {
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; color: #1a1a1a;">

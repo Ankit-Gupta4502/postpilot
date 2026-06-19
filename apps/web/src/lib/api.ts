@@ -1,8 +1,20 @@
 import axios, { type AxiosRequestConfig } from 'axios'
 
-const API_BASE = typeof window !== 'undefined'
-  ? ''
-  : (process.env['VITE_API_URL'] ?? 'http://localhost:8080')
+function resolveApiBase(): string {
+  const url = import.meta.env['VITE_API_URL']
+  if (!url) {
+    console.warn('[api] VITE_API_URL is not set — falling back to http://localhost:8080')
+  }
+  return url ?? 'http://localhost:8080'
+}
+
+const API_BASE = resolveApiBase()
+
+interface ApiEnvelope<T> {
+  status: 'success' | 'error'
+  message: string
+  data: T
+}
 
 export async function apiFetch<T>(path: string, options?: AxiosRequestConfig & { orgId?: string }): Promise<T> {
   const { orgId, ...axiosOptions } = options ?? {}
@@ -12,11 +24,14 @@ export async function apiFetch<T>(path: string, options?: AxiosRequestConfig & {
   }
   if (orgId) headers['X-Org-Id'] = orgId
 
-  const res = await axios<T>(`${API_BASE}${path}`, {
+  const res = await axios<ApiEnvelope<T>>(`${API_BASE}${path}`, {
     ...axiosOptions,
     headers,
     withCredentials: true,
   })
 
-  return res.data
+  // 204 No Content has no body
+  if (res.status === 204) return undefined as T
+
+  return res.data.data
 }

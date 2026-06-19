@@ -6,13 +6,14 @@ import { getAdapter } from '@postpilot/adapters'
 import { decrypt } from '../lib/encryption'
 import { enqueueMessage } from '../lib/queue'
 import { QUEUE_NAMES } from '@postpilot/shared'
+import { ok, accepted, fail } from '../lib/response'
 
 export const socialAccountsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { workspaceId: string } }>('/:workspaceId', { preHandler: [requireOrg] }, async (req, reply) => {
     const accounts = await db.query.socialAccounts.findMany({
       where: eq(schema.socialAccounts.workspaceId, req.params.workspaceId),
     })
-    return reply.send(accounts)
+    return ok(reply, { data: accounts, message: 'Social accounts retrieved' })
   })
 
   fastify.delete<{ Params: { accountId: string } }>(
@@ -25,9 +26,8 @@ export const socialAccountsRouter: FastifyPluginAsync = async (fastify) => {
           eq(schema.socialAccounts.orgId, req.orgId!)
         ),
       })
-      if (!account) return reply.status(404).send({ code: 'NOT_FOUND' })
+      if (!account) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Account not found' })
 
-      // Best-effort token revocation
       if (account.accessToken) {
         const accessToken = decrypt(account.accessToken)
         await getAdapter(account.platform).disconnect({ accessToken }).catch(() => {})
@@ -37,15 +37,12 @@ export const socialAccountsRouter: FastifyPluginAsync = async (fastify) => {
         .set({ status: 'revoked', updatedAt: new Date() })
         .where(eq(schema.socialAccounts.id, account.id))
 
-      // Cancel in-flight syndication jobs for this account
       await db.update(schema.syndicationJobs)
         .set({ status: 'cancelled' })
-        .where(
-          and(
-            eq(schema.syndicationJobs.socialAccountId, account.id),
-            eq(schema.syndicationJobs.status, 'queued')
-          )
-        )
+        .where(and(
+          eq(schema.syndicationJobs.socialAccountId, account.id),
+          eq(schema.syndicationJobs.status, 'queued')
+        ))
 
       await db.insert(schema.auditLog).values({
         orgId: req.orgId!,
@@ -56,11 +53,10 @@ export const socialAccountsRouter: FastifyPluginAsync = async (fastify) => {
         metadata: JSON.stringify({ platform: account.platform, username: account.username }),
       }).catch(() => {})
 
-      return reply.send({ disconnected: true })
+      return ok(reply, { data: { disconnected: true }, message: 'Account disconnected' })
     }
   )
 
-  // Trigger a full post history backfill for an account
   fastify.post<{ Params: { accountId: string } }>(
     '/:accountId/backfill',
     { preHandler: [requireOrg] },
@@ -72,17 +68,16 @@ export const socialAccountsRouter: FastifyPluginAsync = async (fastify) => {
         ),
         columns: { id: true, status: true },
       })
-      if (!account) return reply.status(404).send({ code: 'NOT_FOUND' })
+      if (!account) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Account not found' })
       if (account.status !== 'connected') {
-        return reply.status(422).send({ code: 'ACCOUNT_NOT_CONNECTED' })
+        return fail(reply, { status: 422, code: 'ACCOUNT_NOT_CONNECTED', message: 'Account is not connected' })
       }
 
       await enqueueMessage(QUEUE_NAMES.BACKFILL, { socialAccountId: account.id })
-      return reply.status(202).send({ queued: true })
+      return accepted(reply, { data: { queued: true }, message: 'Backfill queued' })
     }
   )
 
-  // OAuth initiation (legacy — use GET /oauth/:platform/init instead)
   fastify.post<{ Body: { workspaceId: string; platform: string } }>(
     '/connect',
     { preHandler: [requireOrg] },
@@ -98,7 +93,7 @@ export const socialAccountsRouter: FastifyPluginAsync = async (fastify) => {
         redirectUri: `${process.env['APP_BASE_URL']}/oauth/${platform}/callback`,
         expiresAt: new Date(Date.now() + 10 * 60 * 1000),
       })
-      return reply.send({ state, platform })
+      return ok(reply, { data: { state, platform }, message: 'OAuth state created' })
     }
   )
 }

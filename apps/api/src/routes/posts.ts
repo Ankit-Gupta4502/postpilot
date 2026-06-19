@@ -3,6 +3,7 @@ import { db, schema } from '@postpilot/db'
 import { eq, and, inArray } from 'drizzle-orm'
 import { requireOrg } from '../middleware/require-auth'
 import { generateIdempotencyKey } from '@postpilot/shared'
+import { ok, created } from '../lib/response'
 
 export const postsRouter: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Querystring: { workspaceId: string } }>('/', { preHandler: [requireOrg] }, async (req, reply) => {
@@ -13,7 +14,7 @@ export const postsRouter: FastifyPluginAsync = async (fastify) => {
       ),
       orderBy: (posts, { desc }) => [desc(posts.createdAt)],
     })
-    return reply.send(posts)
+    return ok(reply, { data: posts, message: 'Posts retrieved' })
   })
 
   fastify.post<{ Body: { workspaceId: string; content: string; accountIds: string[]; scheduledFor?: string; timezone?: string; mediaIds?: string[] } }>(
@@ -22,7 +23,6 @@ export const postsRouter: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const { workspaceId, content, accountIds, scheduledFor, timezone, mediaIds } = req.body
 
-      // Fetch platforms for the selected accounts (also validates org ownership)
       const accounts = accountIds.length > 0
         ? await db.query.socialAccounts.findMany({
             where: and(
@@ -67,7 +67,7 @@ export const postsRouter: FastifyPluginAsync = async (fastify) => {
         return [newPost]
       })
 
-      return reply.status(201).send(post)
+      return created(reply, { data: post, message: 'Post created' })
     }
   )
 }

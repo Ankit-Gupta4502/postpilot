@@ -3,13 +3,14 @@ import { db, schema } from '@postpilot/db'
 import { eq, and, desc } from 'drizzle-orm'
 import { requireOrg } from '../middleware/require-auth'
 import { enqueueMessage } from '../lib/queue'
+import { ok, fail } from '../lib/response'
 
 function requireOrgOwner(roles: string[]) {
   return async function checkRole(req: Parameters<typeof requireOrg>[0], reply: Parameters<typeof requireOrg>[1]) {
     await requireOrg(req, reply)
     if (reply.sent) return
     if (!roles.includes(req.orgRole ?? '')) {
-      return reply.status(403).send({ code: 'FORBIDDEN', message: 'Owner or admin required' })
+      return fail(reply, { status: 403, code: 'FORBIDDEN', message: 'Owner or admin required' })
     }
   }
 }
@@ -17,10 +18,7 @@ function requireOrgOwner(roles: string[]) {
 const ownerOrAdmin = requireOrgOwner(['owner', 'admin'])
 
 export const adminRouter: FastifyPluginAsync = async (fastify) => {
-  // List dead-letter jobs for the org's queues (all orgs share queues; filter by jobRef if needed)
-  fastify.get<{
-    Querystring: { status?: string; limit?: number }
-  }>(
+  fastify.get<{ Querystring: { status?: string; limit?: number } }>(
     '/dlq',
     { preHandler: [ownerOrAdmin] },
     async (req, reply) => {
@@ -36,11 +34,10 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         limit: Math.min(Number(limit ?? 50), 200),
       })
 
-      return reply.send({ jobs })
+      return ok(reply, { data: { jobs }, message: 'Dead-letter jobs retrieved' })
     }
   )
 
-  // Replay a dead-letter job — re-enqueue its payload to the source queue
   fastify.post<{ Params: { id: string } }>(
     '/dlq/:id/replay',
     { preHandler: [ownerOrAdmin] },
@@ -48,9 +45,9 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
       const job = await db.query.deadLetterJobs.findFirst({
         where: eq(schema.deadLetterJobs.id, req.params.id),
       })
-      if (!job) return reply.status(404).send({ code: 'NOT_FOUND' })
+      if (!job) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Job not found' })
       if (job.status !== 'open') {
-        return reply.status(422).send({ code: 'ALREADY_PROCESSED', status: job.status })
+        return fail(reply, { status: 422, code: 'ALREADY_PROCESSED', message: 'Job has already been processed', extra: { jobStatus: job.status } })
       }
 
       await enqueueMessage(job.sourceQueue, job.payload)
@@ -59,11 +56,10 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         .set({ status: 'replayed', replayedAt: new Date() })
         .where(eq(schema.deadLetterJobs.id, job.id))
 
-      return reply.send({ replayed: true })
+      return ok(reply, { data: { replayed: true }, message: 'Job replayed' })
     }
   )
 
-  // Discard a dead-letter job — mark as discarded, no re-enqueue
   fastify.post<{ Params: { id: string } }>(
     '/dlq/:id/discard',
     { preHandler: [ownerOrAdmin] },
@@ -75,13 +71,13 @@ export const adminRouter: FastifyPluginAsync = async (fastify) => {
         ),
         columns: { id: true },
       })
-      if (!job) return reply.status(404).send({ code: 'NOT_FOUND' })
+      if (!job) return fail(reply, { status: 404, code: 'NOT_FOUND', message: 'Job not found or already processed' })
 
       await db.update(schema.deadLetterJobs)
         .set({ status: 'discarded' })
         .where(eq(schema.deadLetterJobs.id, job.id))
 
-      return reply.send({ discarded: true })
+      return ok(reply, { data: { discarded: true }, message: 'Job discarded' })
     }
   )
 }

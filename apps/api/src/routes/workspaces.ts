@@ -3,9 +3,9 @@ import { db, schema } from '@postpilot/db'
 import { eq, and } from 'drizzle-orm'
 import { requireOrg } from '../middleware/require-auth'
 import { checkWorkspaceLimit } from '../middleware/plan-gate'
+import { ok, created, noContent, fail } from '../lib/response'
 
 export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
-  // List workspaces for current user in the active org
   fastify.get('/', { preHandler: [requireOrg] }, async (req, reply) => {
     const members = await db.query.workspaceMembers.findMany({
       where: and(
@@ -14,10 +14,9 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
       ),
       with: { workspace: true },
     })
-    return reply.send(members.map((m) => ({ ...m.workspace, role: m.role })))
+    return ok(reply, { data: members.map((m) => ({ ...m.workspace, role: m.role })), message: 'Workspaces retrieved' })
   })
 
-  // Create workspace
   fastify.post<{ Body: { name: string } }>(
     '/',
     { preHandler: [requireOrg, checkWorkspaceLimit] },
@@ -31,7 +30,6 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
           createdBy: req.userId!,
         }).returning()
 
-        // Creator becomes workspace admin
         await tx.insert(schema.workspaceMembers).values({
           workspaceId: ws!.id,
           orgId: req.orgId!,
@@ -42,17 +40,16 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
         return ws
       })
 
-      return reply.status(201).send(workspace)
+      return created(reply, { data: workspace, message: 'Workspace created' })
     }
   )
 
-  // Rename workspace (workspace admin or org admin/owner)
   fastify.patch<{ Params: { workspaceId: string }; Body: { name: string } }>(
     '/:workspaceId',
     { preHandler: [requireOrg] },
     async (req, reply) => {
       const { name } = req.body
-      if (!name?.trim()) return reply.status(400).send({ code: 'INVALID_NAME' })
+      if (!name?.trim()) return fail(reply, { status: 400, code: 'INVALID_NAME', message: 'Name cannot be empty' })
 
       const member = await db.query.workspaceMembers.findFirst({
         where: and(
@@ -63,10 +60,8 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
         columns: { role: true },
       })
       const orgRole = req.orgRole
-      const canEdit =
-        orgRole === 'owner' || orgRole === 'admin' ||
-        member?.role === 'admin'
-      if (!canEdit) return reply.status(403).send({ code: 'FORBIDDEN' })
+      const canEdit = orgRole === 'owner' || orgRole === 'admin' || member?.role === 'admin'
+      if (!canEdit) return fail(reply, { status: 403, code: 'FORBIDDEN', message: 'Insufficient permissions' })
 
       const [updated] = await db.update(schema.workspaces)
         .set({ name: name.trim(), updatedAt: new Date() })
@@ -76,11 +71,10 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
         ))
         .returning()
 
-      return reply.send(updated)
+      return ok(reply, { data: updated, message: 'Workspace updated' })
     }
   )
 
-  // Get workspace members
   fastify.get<{ Params: { workspaceId: string } }>(
     '/:workspaceId/members',
     { preHandler: [requireOrg] },
@@ -92,19 +86,19 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
         ),
         with: { user: true },
       })
-      return reply.send(
-        members.map((m) => ({
+      return ok(reply, {
+        data: members.map((m) => ({
           id: m.id,
           userId: m.userId,
           role: m.role,
           createdAt: m.createdAt,
           user: { id: m.user.id, name: m.user.name, email: m.user.email, image: m.user.image },
-        }))
-      )
+        })),
+        message: 'Members retrieved',
+      })
     }
   )
 
-  // Add workspace member (workspace admin or org admin/owner)
   fastify.post<{
     Params: { workspaceId: string }
     Body: { userId: string; role: 'admin' | 'editor' | 'approver' | 'viewer' }
@@ -114,7 +108,6 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const { userId, role } = req.body
 
-      // Ensure target is an org member
       const orgMember = await db.query.orgMembers.findFirst({
         where: and(
           eq(schema.orgMembers.orgId, req.orgId!),
@@ -123,7 +116,7 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
         ),
       })
       if (!orgMember) {
-        return reply.status(400).send({ code: 'NOT_ORG_MEMBER', message: 'User is not a member of this org' })
+        return fail(reply, { status: 400, code: 'NOT_ORG_MEMBER', message: 'User is not a member of this org' })
       }
 
       const [member] = await db.insert(schema.workspaceMembers)
@@ -134,11 +127,10 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
         })
         .returning()
 
-      return reply.status(201).send(member)
+      return created(reply, { data: member, message: 'Member added' })
     }
   )
 
-  // Remove workspace member
   fastify.delete<{ Params: { workspaceId: string; userId: string } }>(
     '/:workspaceId/members/:userId',
     { preHandler: [requireOrg] },
@@ -149,7 +141,7 @@ export const workspacesRouter: FastifyPluginAsync = async (fastify) => {
           eq(schema.workspaceMembers.userId, req.params.userId),
           eq(schema.workspaceMembers.orgId, req.orgId!)
         ))
-      return reply.status(204).send()
+      return noContent(reply)
     }
   )
 }

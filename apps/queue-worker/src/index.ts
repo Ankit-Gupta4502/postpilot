@@ -1,3 +1,4 @@
+import './env.js'
 import { runWorker } from './worker'
 
 console.log('PostPilot queue worker starting...')

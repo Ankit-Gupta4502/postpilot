@@ -13,6 +13,7 @@
     "@postpilot/adapters": "workspace:*",
     "@postpilot/db": "workspace:*",
     "@postpilot/shared": "workspace:*",
+    "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "node-cron": "^3.0.3"
   },

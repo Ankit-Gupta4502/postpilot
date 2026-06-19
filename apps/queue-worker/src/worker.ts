@@ -5,7 +5,7 @@ import { analyticsHandler } from './handlers/analytics'
 import { webhookHandler } from './handlers/webhook'
 import { backfillHandler } from './handlers/backfill'
 
-const QUEUE_ENDPOINT = process.env['CF_QUEUES_PULL_ENDPOINT']!
+const QUEUE_ENDPOINT = process.env['CF_QUEUES_PULL_ENDPOINT']
 const VISIBILITY_TIMEOUT_MS = Number(process.env['QUEUE_VISIBILITY_TIMEOUT_MS'] ?? 900000)
 const BATCH_SIZE = Number(process.env['QUEUE_PULL_BATCH_SIZE'] ?? 10)
 
@@ -27,7 +27,7 @@ const HANDLERS: Record<string, (msg: QueueMessage) => Promise<void>> = {
 }
 
 async function pullMessages(queueId: string): Promise<QueueMessage[]> {
-  const res = await fetch(`${QUEUE_ENDPOINT}/${queueId}/messages/pull`, {
+  const res = await fetch(`${QUEUE_ENDPOINT!}/${queueId}/messages/pull`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${process.env['CF_API_TOKEN']}`,
@@ -58,6 +58,11 @@ async function ackMessages(queueId: string, leaseIds: string[], retryLeaseIds: s
 }
 
 export async function runWorker() {
+  if (!QUEUE_ENDPOINT || !process.env['CF_API_TOKEN']) {
+    console.log('CF_QUEUES_PULL_ENDPOINT or CF_API_TOKEN not configured — queue worker exiting.')
+    return
+  }
+
   const queues = Object.keys(HANDLERS)
   console.log(`Watching queues: ${queues.join(', ')}`)
 

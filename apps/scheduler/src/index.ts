@@ -1,3 +1,4 @@
+import './env.js'
 import cron from 'node-cron'
 import { scheduledPublishJob } from './jobs/scheduled-publish'
 import { planReconciliationJob } from './jobs/plan-reconciliation'
