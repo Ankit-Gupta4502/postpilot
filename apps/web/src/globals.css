@@ -2,24 +2,23 @@
 @source "../../../packages/ui/src/**/*.{ts,tsx}";
 @import "@postpilot/ui/globals.css";
 
-/* ── Landing page ── */
-:root {
-  --font-display: "Arial Black", "Impact", "Haettenschweiler", system-ui, sans-serif;
+@keyframes icon-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(0, -12px, 0) rotate(2deg);
+  }
 }
 
-@keyframes lp-breathe {
-  from { opacity: 0.65; transform: scale(1); }
-  to   { opacity: 1;    transform: scale(1.07); }
-}
-@keyframes lp-blink {
-  0%, 100% { opacity: 1;   transform: scale(1); }
-  50%       { opacity: 0.4; transform: scale(0.65); }
-}
-@keyframes lp-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
+.icon-float {
+  animation: icon-float 8s ease-in-out infinite;
+  opacity: 0.45;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [class*="[animation:lp-"] { animation: none !important; }
+  .icon-float {
+    animation: none;
+  }
 }
