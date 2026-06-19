@@ -131,7 +131,7 @@ export const oauthRouter: FastifyPluginAsync = async (fastify) => {
     async (req, reply) => {
       const { platform } = req.params
       const { code, state, error, error_description } = req.query
-      const appBaseUrl = process.env['APP_BASE_URL'] ?? 'http://localhost:3000'
+      const appBaseUrl = process.env['APP_BASE_URL'] ?? 'http://localhost:5173'
 
       if (error) {
         return reply.redirect(`${appBaseUrl}/dashboard?error=${encodeURIComponent(error_description ?? error)}`)

@@ -18,7 +18,7 @@ function getResend(): Resend | null {
 }
 
 const FROM = process.env['EMAIL_FROM'] ?? 'no-reply@postpilot.app'
-const APP_BASE_URL = () => process.env['APP_BASE_URL'] ?? 'http://localhost:3000'
+const APP_BASE_URL = () => process.env['APP_BASE_URL'] ?? 'http://localhost:5173'
 
 interface WorkspaceGrant {
   workspaceId: string

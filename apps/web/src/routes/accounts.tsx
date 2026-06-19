@@ -12,12 +12,7 @@ export const Route = createFileRoute('/accounts')({
 
 const ALL_PLATFORMS = ['instagram', 'facebook', 'linkedin', 'x', 'youtube']
 
-const API_BASE =
-  typeof window !== 'undefined'
-    ? window.location.origin === 'http://localhost:3000'
-      ? 'http://localhost:8080'
-      : ''
-    : 'http://localhost:8080'
+const API_BASE = import.meta.env['VITE_API_URL'] ?? 'http://localhost:8080'
 
 function AccountsPage() {
   const { activeOrg, activeWorkspace } = useOrg()
